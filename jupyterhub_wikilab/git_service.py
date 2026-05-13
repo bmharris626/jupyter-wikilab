@@ -74,7 +74,28 @@ def detect_or_init_repo(wiki_path: str, init_if_missing: bool = True) -> bool:
         return False
 
 
-def construct_commit_actor(email: str) -> Actor:
+class CommitActor:
+    """
+    Commit actor that supports both attribute and subscript access.
+
+    Compatible with gitpython's Actor interface while also supporting
+    dict-like access (e.g., actor["name"]).
+    """
+
+    def __init__(self, name: str, email: str) -> None:
+        self.name = name
+        self.email = email
+
+    def __getitem__(self, key: str) -> str:
+        if key in ("name", "email"):
+            return getattr(self, key)
+        raise KeyError(key)
+
+    def __repr__(self) -> str:
+        return f"{self.name} <{self.email}>"
+
+
+def construct_commit_actor(email: str) -> CommitActor:
     """
     Construct a commit actor from JUPYTERHUB_USER and configured email.
 
@@ -82,11 +103,11 @@ def construct_commit_actor(email: str) -> Actor:
         email: Email address for the commit
 
     Returns:
-        Actor object for the commit
+        CommitActor object for the commit
     """
     # Get user from environment or default to 'wikilab'
     name = os.environ.get("JUPYTERHUB_USER", "wikilab")
-    return Actor(name, email)
+    return CommitActor(name, email)
 
 
 def commit_page_update(
