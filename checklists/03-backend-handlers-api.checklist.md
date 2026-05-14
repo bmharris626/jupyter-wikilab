@@ -29,12 +29,12 @@ Expose backend services through `/wikilab/api/` handlers with locking and confli
   - **Validation:** `pytest -q tests/python/test_handlers_conflicts.py::test_put_returns_409_on_stale_head`
   - **Commit suggestion:** `feat(api): add stale-write conflict detection with 409 responses`
 
-- [ ] **Implement history/backlinks/search endpoints**
+- [x] **Implement history/backlinks/search endpoints**
   - **Task:** Wire history retrieval and grep-backed read endpoints.
   - **Validation:** `pytest -q tests/python/test_handlers_read_features.py`
   - **Commit suggestion:** `feat(api): add history backlinks and search endpoints`
 
-- [ ] **Implement git status/pull/push endpoints**
+- [x] **Implement git status/pull/push endpoints**
   - **Task:** Expose repo sync operations through REST handlers.
   - **Validation:** `pytest -q tests/python/test_handlers_git_sync.py`
   - **Commit suggestion:** `feat(api): add git status pull push endpoints`
