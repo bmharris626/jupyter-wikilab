@@ -29,7 +29,7 @@ Add git-specific operations behind a service abstraction.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_search_grep_parse_results`
   - **Commit suggestion:** `feat(git): add full-text git grep parser`
 
-- [ ] **Implement backlinks grep wrapper**
+- [x] **Implement backlinks grep wrapper**
   - **Task:** Wrap `git grep -l` for backlink discovery.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_backlinks_grep_results`
   - **Commit suggestion:** `feat(git): add backlinks lookup via git grep`
