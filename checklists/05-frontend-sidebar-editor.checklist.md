@@ -19,10 +19,10 @@ Deliver primary browsing/editing experience with save and dirty-state behavior.
   - **Validation:** `jlpm test -- WikiBrowser` — 20/20 passed (11 original + 9 new)
   - **Commit suggestion:** `feat(ui): add git status indicator and push/pull actions`
 
-- [ ] **Implement `WikiEditor.tsx` split editor/preview layout**
+- [x] **Implement `WikiEditor.tsx` split editor/preview layout**
   - **Task:** Render CodeMirror and markdown preview side-by-side.
-  - **Validation:** `jlpm test -- WikiEditor-layout`
-  - **Commit suggestion:** `feat(ui): add split wiki editor and preview`
+  - **Validation:** `jlpm test -- WikiEditor` — 15/15 passed, 98.61% coverage
+  - **Commit suggestion:** `feat(ui): add split wiki editor and preview layout`
 
 - [ ] **Wire page load into editor state**
   - **Task:** Load selected page content and associated `head_sha`.
