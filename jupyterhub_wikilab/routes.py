@@ -36,6 +36,9 @@ from jupyterhub_wikilab.git_service import (
     get_wiki_git_status,
     git_pull_wiki,
     git_push_wiki,
+    get_file_history,
+    search_grep_results,
+    backlinks_grep_results,
 )
 
 
@@ -270,6 +273,73 @@ class WikiGitPushHandler(APIHandler):
             self.finish(json.dumps({"error": "Git push failed"}))
 
 
+class WikiPageHistoryHandler(APIHandler):
+    """Handler for retrieving commit history for a page."""
+
+    @tornado.web.authenticated
+    def get(self, wiki_id, slug):
+        """Get commit history for a page."""
+        wiki_path = None
+        wikis = list_wikis()
+        if wiki_id in wikis:
+            wiki_path = wikis[wiki_id].get("path")
+
+        if wiki_path is None:
+            self.set_status(404)
+            self.finish(json.dumps({"error": "Wiki not found"}))
+            return
+
+        history = get_file_history(str(wiki_path), f"{slug}.md")
+        self.finish(json.dumps({"history": history}))
+
+
+class WikiPageBacklinksHandler(APIHandler):
+    """Handler for finding backlinks to a page."""
+
+    @tornado.web.authenticated
+    def get(self, wiki_id, slug):
+        """Get backlinks for a page."""
+        wiki_path = None
+        wikis = list_wikis()
+        if wiki_id in wikis:
+            wiki_path = wikis[wiki_id].get("path")
+
+        if wiki_path is None:
+            self.set_status(404)
+            self.finish(json.dumps({"error": "Wiki not found"}))
+            return
+
+        backlinks = backlinks_grep_results(str(wiki_path), f"{slug}.md")
+        self.finish(json.dumps({"backlinks": backlinks}))
+
+
+class WikiPageSearchHandler(APIHandler):
+    """Handler for full-text search across a wiki."""
+
+    @tornado.web.authenticated
+    def get(self, wiki_id):
+        """Search wiki content using git grep."""
+        wiki_path = None
+        wikis = list_wikis()
+        if wiki_id in wikis:
+            wiki_path = wikis[wiki_id].get("path")
+
+        if wiki_path is None:
+            self.set_status(404)
+            self.finish(json.dumps({"error": "Wiki not found"}))
+            return
+
+        term = self.get_argument("term", "")
+        if not term:
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Missing 'term' query parameter"}))
+            return
+
+        case_sensitive = self.get_argument("case_sensitive", "false").lower() == "true"
+        results = search_grep_results(str(wiki_path), term, case_sensitive)
+        self.finish(json.dumps({"results": results}))
+
+
 def setup_route_handlers(web_app):
     """Setup all the route handlers for the wiki extension."""
     host_pattern = ".*$"
@@ -303,6 +373,19 @@ def setup_route_handlers(web_app):
             (
                 url_path_join(wiki_pages_route_pattern, r"([^/]+)/rename$"),
                 WikiPageRenameHandler,
+            ),
+            # Page read-feature routes (specific routes before wildcard)
+            (
+                url_path_join(wiki_pages_route_pattern, "search$"),
+                WikiPageSearchHandler,
+            ),
+            (
+                url_path_join(wiki_pages_route_pattern, r"([^/]+)/history$"),
+                WikiPageHistoryHandler,
+            ),
+            (
+                url_path_join(wiki_pages_route_pattern, r"([^/]+)/backlinks$"),
+                WikiPageBacklinksHandler,
             ),
             # Single-segment route (get/save merged into one handler)
             (
