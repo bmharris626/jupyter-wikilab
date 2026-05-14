@@ -24,7 +24,7 @@ Add git-specific operations behind a service abstraction.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_file_history_returns_entries`
   - **Commit suggestion:** `feat(git): add per-page git history retrieval`
 
-- [ ] **Implement search grep wrapper**
+- [x] **Implement search grep wrapper**
   - **Task:** Wrap `git grep -n -i` and parse to structured search results.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_search_grep_parse_results`
   - **Commit suggestion:** `feat(git): add full-text git grep parser`
