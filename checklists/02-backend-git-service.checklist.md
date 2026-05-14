@@ -19,7 +19,7 @@ Add git-specific operations behind a service abstraction.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_commit_page_update_message`
   - **Commit suggestion:** `feat(git): implement page update commit operation`
 
-- [ ] **Implement per-file history retrieval**
+- [x] **Implement per-file history retrieval**
   - **Task:** Return commit log entries for a wiki page path.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_file_history_returns_entries`
   - **Commit suggestion:** `feat(git): add per-page git history retrieval`
