@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,18 @@ from jupyterhub_wikilab.wiki_service import (
     delete_page,
     rename_page,
 )
+
+# Per-wiki asyncio locks for serializing write operations
+_wiki_locks: Dict[str, asyncio.Lock] = {}
+
+
+def _get_wiki_lock(wiki_id: str) -> asyncio.Lock:
+    """Get or create an asyncio lock for a given wiki."""
+    if wiki_id not in _wiki_locks:
+        _wiki_locks[wiki_id] = asyncio.Lock()
+    return _wiki_locks[wiki_id]
+
+
 from jupyterhub_wikilab.git_service import (
     get_wiki_git_status,
     git_pull_wiki,
@@ -39,10 +52,11 @@ class WikiCreateHandler(APIHandler):
     """Handler for creating a wiki."""
 
     @tornado.web.authenticated
-    def post(self):
+    def post(self, wiki_id):
         """Create a new wiki."""
         body = self.get_json_body()
-        wiki_id = body.get("id")
+        # Prefer wiki_id from URL path; fall back to body
+        wiki_id = wiki_id or body.get("id")
         name = body.get("name")
         path = body.get("path")
 
@@ -51,6 +65,13 @@ class WikiCreateHandler(APIHandler):
             self.finish(
                 json.dumps({"error": "Missing required fields: id, name, path"})
             )
+            return
+
+        # Validate path is a real directory
+        path_obj = Path(path)
+        if not path_obj.is_dir():
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Path must be an existing directory"}))
             return
 
         success = create_wiki(wiki_id, name, path)
@@ -94,8 +115,12 @@ class WikiPageListHandler(APIHandler):
         self.finish(json.dumps({"pages": pages}))
 
 
-class WikiPageGetHandler(APIHandler):
-    """Handler for getting a page."""
+class WikiPageContentHandler(APIHandler):
+    """Handler for getting and saving a page.
+
+    Merged GET and PUT into a single handler because tornado would
+    otherwise overwrite duplicate URL patterns.
+    """
 
     @tornado.web.authenticated
     def get(self, wiki_id, slug):
@@ -107,13 +132,9 @@ class WikiPageGetHandler(APIHandler):
             self.set_status(404)
             self.finish(json.dumps({"error": "Page not found"}))
 
-
-class WikiPageSaveHandler(APIHandler):
-    """Handler for saving a page."""
-
     @tornado.web.authenticated
-    def put(self, wiki_id, slug):
-        """Save a page."""
+    async def put(self, wiki_id, slug):
+        """Save a page — serialized per-wiki via asyncio lock."""
         body = self.get_json_body()
         content = body.get("content")
         head_sha = body.get("head_sha")
@@ -123,7 +144,9 @@ class WikiPageSaveHandler(APIHandler):
             self.finish(json.dumps({"error": "Missing content"}))
             return
 
-        success = save_page(wiki_id, slug, content, head_sha)
+        lock = _get_wiki_lock(wiki_id)
+        async with lock:
+            success = save_page(wiki_id, slug, content, head_sha)
         if success:
             self.finish(json.dumps({"message": "Page saved successfully"}))
         else:
@@ -135,8 +158,8 @@ class WikiPageCreateHandler(APIHandler):
     """Handler for creating a page."""
 
     @tornado.web.authenticated
-    def post(self, wiki_id):
-        """Create a new page."""
+    async def post(self, wiki_id):
+        """Create a new page — serialized per-wiki via asyncio lock."""
         body = self.get_json_body()
         title = body.get("title")
         content = body.get("content")
@@ -148,7 +171,9 @@ class WikiPageCreateHandler(APIHandler):
             )
             return
 
-        slug = create_page(wiki_id, title, content)
+        lock = _get_wiki_lock(wiki_id)
+        async with lock:
+            slug = create_page(wiki_id, title, content)
         if slug:
             self.finish(
                 json.dumps({"slug": slug, "message": "Page created successfully"})
@@ -162,9 +187,11 @@ class WikiPageDeleteHandler(APIHandler):
     """Handler for deleting a page."""
 
     @tornado.web.authenticated
-    def delete(self, wiki_id, slug):
-        """Delete a page."""
-        success = delete_page(wiki_id, slug)
+    async def delete(self, wiki_id, slug):
+        """Delete a page — serialized per-wiki via asyncio lock."""
+        lock = _get_wiki_lock(wiki_id)
+        async with lock:
+            success = delete_page(wiki_id, slug)
         if success:
             self.finish(json.dumps({"message": "Page deleted successfully"}))
         else:
@@ -176,8 +203,8 @@ class WikiPageRenameHandler(APIHandler):
     """Handler for renaming a page."""
 
     @tornado.web.authenticated
-    def post(self, wiki_id, slug):
-        """Rename a page."""
+    async def post(self, wiki_id, slug):
+        """Rename a page — serialized per-wiki via asyncio lock."""
         body = self.get_json_body()
         new_title = body.get("new_title")
 
@@ -186,7 +213,9 @@ class WikiPageRenameHandler(APIHandler):
             self.finish(json.dumps({"error": "Missing new_title"}))
             return
 
-        success = rename_page(wiki_id, slug, new_title)
+        lock = _get_wiki_lock(wiki_id)
+        async with lock:
+            success = rename_page(wiki_id, slug, new_title)
         if success:
             self.finish(json.dumps({"message": "Page renamed successfully"}))
         else:
@@ -242,21 +271,20 @@ def setup_route_handlers(web_app):
     handlers = [
         (wiki_route_pattern, WikiListHandler),
         (url_path_join(wiki_route_pattern, r"([^/]+)$"), WikiCreateHandler),
-        (url_path_join(wiki_route_pattern, r"([^/]+)/delete$"), WikiDeleteHandler),
+        (url_path_join(wiki_route_pattern, r"([^/]+)/delete/?"), WikiDeleteHandler),
     ]
 
     # Wiki page routes
+    # NOTE: Specific routes must come before the wildcard list route so that
+    # tornado's first-match-wins ordering gives priority to dedicated handlers.
     wiki_pages_route_pattern = url_path_join(
         base_url, "wikilab", "api", "wikis", r"([^/]+)", "pages"
     )
-    # Page listing route must come before page-get/save (no slug suffix)
     handlers.extend(
         [
-            (url_path_join(wiki_pages_route_pattern, r"(.*)"), WikiPageListHandler),
-            (url_path_join(wiki_pages_route_pattern, r"([^/]+)$"), WikiPageGetHandler),
-            (url_path_join(wiki_pages_route_pattern, r"([^/]+)$"), WikiPageSaveHandler),
+            # Page action routes (create has no slug; delete/rename need slug)
             (
-                url_path_join(wiki_pages_route_pattern, r"([^/]+)/create$"),
+                url_path_join(wiki_pages_route_pattern, "create$"),
                 WikiPageCreateHandler,
             ),
             (
@@ -266,6 +294,16 @@ def setup_route_handlers(web_app):
             (
                 url_path_join(wiki_pages_route_pattern, r"([^/]+)/rename$"),
                 WikiPageRenameHandler,
+            ),
+            # Single-segment route (get/save merged into one handler)
+            (
+                url_path_join(wiki_pages_route_pattern, r"([^/]+)$"),
+                WikiPageContentHandler,
+            ),
+            # Wildcard list route — must be last to avoid shadowing above routes
+            (
+                url_path_join(wiki_pages_route_pattern, r"/?$"),
+                WikiPageListHandler,
             ),
         ]
     )
