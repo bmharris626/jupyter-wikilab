@@ -228,6 +228,33 @@ def get_file_history(wiki_path: str, file_path: str) -> List[Dict]:
         return []
 
 
+def get_page_sha(wiki_id: str, slug: str) -> str:
+    """
+    Get the latest commit SHA for a wiki page.
+
+    Args:
+        wiki_id: The wiki ID
+        slug: Page slug (without .md extension)
+
+    Returns:
+        Commit hex SHA string, or empty string if page has no commit history
+    """
+    try:
+        repo = get_git_repo(wiki_id)
+        if repo is None:
+            return ""
+
+        page_name = slug if slug.endswith(".md") else f"{slug}.md"
+
+        # Get commits that touched this specific page file
+        commits = list(repo.iter_commits(paths=page_name, max_count=1))
+        if commits:
+            return commits[0].hexsha
+        return ""
+    except Exception:
+        return ""
+
+
 def search_grep_results(
     wiki_path: str, search_term: str, case_sensitive: bool = False
 ) -> List[Dict]:

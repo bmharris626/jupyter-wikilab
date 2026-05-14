@@ -18,6 +18,7 @@ from jupyterhub_wikilab.wiki_service import (
     create_page,
     delete_page,
     rename_page,
+    ConflictError,
 )
 
 # Per-wiki asyncio locks for serializing write operations
@@ -145,8 +146,16 @@ class WikiPageContentHandler(APIHandler):
             return
 
         lock = _get_wiki_lock(wiki_id)
-        async with lock:
-            success = save_page(wiki_id, slug, content, head_sha)
+        try:
+            async with lock:
+                success = save_page(wiki_id, slug, content, head_sha)
+        except ConflictError:
+            self.set_status(409)
+            self.finish(
+                json.dumps({"error": "Stale write detected, page was modified"})
+            )
+            return
+
         if success:
             self.finish(json.dumps({"message": "Page saved successfully"}))
         else:
