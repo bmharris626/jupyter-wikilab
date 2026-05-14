@@ -1,30 +1,29 @@
 /**
  * WikiBrowser — Left sidebar panel for wiki browsing.
  *
- * Displays a wiki selector dropdown and a scrollable page list.
+ * Displays a wiki selector dropdown, a git status indicator with
+ * pull/push buttons, and a scrollable page list.
  * Serves as the primary navigation surface inside JupyterLab.
  *
  * ## Structure
  *
  * ```
- * ┌──────────────────────────┐
- * │ [Wiki Selector Dropdown] │
- * ├──────────────────────────┤
- * │                          │
- * │  Page List (scrollable)  │
- * │                          │
- * └──────────────────────────┘
+ * ┌──────────────────────────────────────────┐
+ * │ [Wiki: v] [main ↑0 ↓0] [↻Pull] [↑Push] │
+ * ├──────────────────────────────────────────┤
+ * │                                          │
+ * │  Page List (scrollable)                  │
+ * │                                          │
+ * └──────────────────────────────────────────┘
  * ```
- *
- * Git status controls and page actions are added in later phases.
  */
 
 import { Panel, PanelLayout } from '@lumino/widgets';
 
 import { ServerConnection } from '@jupyterlab/services';
 
-import { listPages } from '../wikiApi';
-import type { WikiInfo, PageEntry } from '../types';
+import { listPages, getGitStatus, gitPull, gitPush } from '../wikiApi';
+import type { WikiInfo, PageEntry, GitStatusResponse } from '../types';
 
 // ── CSS class namespace ─────────────────────────────────────────────────────
 
@@ -63,7 +62,8 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   // ── Construction ───────────────────────────────────────────────────────
 
   /**
-   * Construct the wiki browser panel.
+   * Construct the wiki browser panel with wiki selector,
+   * git status indicator, and pull/push action buttons.
    */
   constructor() {
     super();
@@ -172,13 +172,25 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   private _pageList!: HTMLUListElement;
   private _placeholder!: HTMLDivElement;
 
+  // Git status fields
+  private _gitStatus: GitStatusResponse = {
+    branch: '',
+    ahead: 0,
+    behind: 0,
+    dirty: false,
+    untracked: 0
+  };
+  private _gitStatusEl!: HTMLDivElement;
+  private _pullBtn!: HTMLButtonElement;
+  private _pushBtn!: HTMLButtonElement;
+
   private _onWikiChange = (): void => {
     const prev = this.wikiSelected.newValue;
     this.wikiSelected.oldValue = prev;
     this.wikiSelected.newValue = this.activeWikiId;
 
     if (prev !== this.activeWikiId) {
-      void this.loadPages();
+      void Promise.all([this.loadPages(), this.refreshGitStatus()]);
     }
   };
 
@@ -203,6 +215,29 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._wikiSelect.addEventListener('change', this._onWikiChange);
     this._toolbar.node.appendChild(label);
     this._toolbar.node.appendChild(this._wikiSelect);
+
+    // Git status indicator (read-only)
+    this._gitStatusEl = document.createElement('div');
+    this._gitStatusEl.className = `${CSS_PREFIX}-gitStatus`;
+    this._gitStatusEl.textContent = '—';
+    this._gitStatusEl.setAttribute('aria-label', 'Git status');
+    this._toolbar.node.appendChild(this._gitStatusEl);
+
+    // Pull button
+    this._pullBtn = document.createElement('button');
+    this._pullBtn.className = `${CSS_PREFIX}-gitBtn`;
+    this._pullBtn.textContent = '↻ Pull';
+    this._pullBtn.setAttribute('aria-label', 'Pull from remote');
+    this._pullBtn.addEventListener('click', () => void this._handlePull());
+    this._toolbar.node.appendChild(this._pullBtn);
+
+    // Push button
+    this._pushBtn = document.createElement('button');
+    this._pushBtn.className = `${CSS_PREFIX}-gitBtn`;
+    this._pushBtn.textContent = '↑ Push';
+    this._pushBtn.setAttribute('aria-label', 'Push to remote');
+    this._pushBtn.addEventListener('click', () => void this._handlePush());
+    this._toolbar.node.appendChild(this._pushBtn);
   }
 
   /** Populate the wiki selector dropdown from the registry. */
@@ -279,6 +314,121 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
 
       li.appendChild(link);
       this._pageList.appendChild(li);
+    }
+  }
+
+  // ── Git status ─────────────────────────────────────────────────────────
+
+  /**
+   * Fetch and display the Git status for the currently selected wiki.
+   */
+  async refreshGitStatus(): Promise<void> {
+    const wikiId = this.activeWikiId;
+
+    if (!wikiId || !this._serverSettings) {
+      this._gitStatus = {
+        branch: '',
+        ahead: 0,
+        behind: 0,
+        dirty: false,
+        untracked: 0
+      };
+      this._renderGitStatus();
+      return;
+    }
+
+    try {
+      const response = await getGitStatus(wikiId, this._serverSettings);
+      this._gitStatus = {
+        branch: response.branch,
+        ahead: response.ahead,
+        behind: response.behind,
+        dirty: response.dirty,
+        untracked: response.untracked
+      };
+    } catch {
+      this._gitStatus = {
+        branch: 'error',
+        ahead: 0,
+        behind: 0,
+        dirty: false,
+        untracked: 0
+      };
+    }
+
+    this._renderGitStatus();
+  }
+
+  private _renderGitStatus(): void {
+    const s = this._gitStatus;
+    const parts: string[] = [];
+
+    if (s.branch) {
+      parts.push(s.branch);
+    }
+    if (s.ahead > 0) {
+      parts.push(`↑${s.ahead}`);
+    }
+    if (s.behind > 0) {
+      parts.push(`↓${s.behind}`);
+    }
+    if (s.dirty) {
+      parts.push('●');
+    }
+
+    this._gitStatusEl.textContent = parts.length ? parts.join('  ') : '—';
+
+    // Dim the status text when there is no branch
+    this._gitStatusEl.style.opacity = s.branch ? '1' : '0.4';
+
+    // Enable/disable pull/push buttons
+    const hasRemote = s.branch !== '' && s.branch !== 'error';
+    this._pullBtn.disabled = !hasRemote;
+    this._pushBtn.disabled = !hasRemote;
+
+    if (!hasRemote) {
+      this._pullBtn.textContent = 'Pull';
+      this._pushBtn.textContent = 'Push';
+    } else {
+      this._pullBtn.textContent = '↻ Pull';
+      this._pushBtn.textContent = '↑ Push';
+    }
+  }
+
+  private async _handlePull(): Promise<void> {
+    if (!this.activeWikiId || !this._serverSettings) {
+      return;
+    }
+    this._pullBtn.textContent = 'Pulling…';
+    this._pullBtn.disabled = true;
+    try {
+      await gitPull(this.activeWikiId, this._serverSettings);
+      await this.refreshGitStatus();
+      await this.loadPages();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this._gitStatusEl.textContent = `Pull failed: ${message}`;
+    } finally {
+      this._pullBtn.textContent = '↻ Pull';
+      this._renderGitStatus();
+    }
+  }
+
+  private async _handlePush(): Promise<void> {
+    if (!this.activeWikiId || !this._serverSettings) {
+      return;
+    }
+    this._pushBtn.textContent = 'Pushing…';
+    this._pushBtn.disabled = true;
+    try {
+      await gitPush(this.activeWikiId, this._serverSettings);
+      await this.refreshGitStatus();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this._gitStatusEl.textContent = `Push failed: ${message}`;
+    } finally {
+      this._pushBtn.textContent = '↑ Push';
+      this._renderGitStatus();
     }
   }
 }

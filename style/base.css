@@ -3,3 +3,67 @@
 
     https://jupyterlab.readthedocs.io/en/stable/developer/css.html
 */
+
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
+
+.jp-WikiBrowser-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--md-border-color);
+  background: var(--jp-layout-color1);
+}
+
+.jp-WikiBrowser-wikiLabel {
+  font-size: var(--jp-ui-font-size1);
+  font-weight: 600;
+}
+
+.jp-WikiBrowser-wikiSelect {
+  flex: 1 1 140px;
+  min-width: 100px;
+  padding: 2px 4px;
+  font-size: var(--jp-ui-font-size1);
+  border: 1px solid var(--md-border-color);
+  border-radius: 3px;
+  background: var(--jp-input-field-background);
+  color: var(--jp-ui-font-color0);
+}
+
+/* ── Git status bar ─────────────────────────────────────────────────────── */
+
+.jp-WikiBrowser-gitStatus {
+  flex: 1 1 auto;
+  font-size: var(--jp-ui-font-size0);
+  font-family: var(--jp-mono-font-family);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px 0;
+  min-width: 60px;
+}
+
+/* ── Git action buttons ─────────────────────────────────────────────────── */
+
+.jp-WikiBrowser-gitBtn {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  font-size: var(--jp-ui-font-size0);
+  border: 1px solid var(--md-border-color);
+  border-radius: 3px;
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color0);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.jp-WikiBrowser-gitBtn:hover:not(:disabled) {
+  background: var(--jp-layout-color2);
+}
+
+.jp-WikiBrowser-gitBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

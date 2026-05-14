@@ -14,10 +14,10 @@ Deliver primary browsing/editing experience with save and dirty-state behavior.
   - **Validation:** `jlpm test -- WikiBrowser-load-pages` — covered within `jlpm test -- WikiBrowser`
   - **Commit suggestion:** `feat(ui): load pages for active wiki selection`
 
-- [ ] **Add git status indicator and push/pull actions**
+- [x] **Add git status indicator and push/pull actions**
   - **Task:** Show ahead/behind and connect action buttons.
-  - **Validation:** `jlpm test -- WikiBrowser-git-status`
-  - **Commit suggestion:** `feat(ui): add git sync controls to sidebar`
+  - **Validation:** `jlpm test -- WikiBrowser` — 20/20 passed (11 original + 9 new)
+  - **Commit suggestion:** `feat(ui): add git status indicator and push/pull actions`
 
 - [ ] **Implement `WikiEditor.tsx` split editor/preview layout**
   - **Task:** Render CodeMirror and markdown preview side-by-side.

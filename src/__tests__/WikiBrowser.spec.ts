@@ -11,10 +11,13 @@ import type { WikiInfo, PageEntry } from '../types';
 // ── Mock the API layer ──────────────────────────────────────────────────────
 
 jest.mock('../wikiApi', () => ({
-  listPages: jest.fn()
+  listPages: jest.fn(),
+  getGitStatus: jest.fn(),
+  gitPull: jest.fn(),
+  gitPush: jest.fn()
 }));
 
-import { listPages } from '../wikiApi';
+import { listPages, getGitStatus, gitPull, gitPush } from '../wikiApi';
 
 // Minimal server settings object for API calls.
 const mockServerSettings: any = {
@@ -170,5 +173,157 @@ describe('WikiBrowser', () => {
 
     expect(browser.wikiSelected.oldValue).toBe('');
     expect(browser.wikiSelected.newValue).toBe('notes');
+  });
+
+  // ── Git status indicator ───────────────────────────────────────────────
+
+  it('should have a git status element in the toolbar', () => {
+    const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
+    expect(gitStatusEl).toBeTruthy();
+  });
+
+  it('should have pull and push buttons in the toolbar', () => {
+    const pullBtn = browser.node.querySelector('.jp-WikiBrowser-gitBtn');
+    const pushBtn = browser.node.querySelectorAll('.jp-WikiBrowser-gitBtn');
+    expect(pullBtn).toBeTruthy();
+    expect(pushBtn).toHaveLength(2);
+  });
+
+  it('should show disabled buttons when no wiki is selected', async () => {
+    await browser.refreshGitStatus();
+    const pullBtn = browser.node.querySelector(
+      '.jp-WikiBrowser-gitBtn'
+    ) as HTMLButtonElement;
+    const pushBtn = browser.node.querySelectorAll(
+      '.jp-WikiBrowser-gitBtn'
+    )[1] as HTMLButtonElement;
+    expect(pullBtn.disabled).toBe(true);
+    expect(pushBtn.disabled).toBe(true);
+  });
+
+  it('should display branch and ahead/behind after successful git status fetch', async () => {
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main',
+      ahead: 3,
+      behind: 1,
+      dirty: false,
+      untracked: 0
+    });
+
+    browser.populateWikis({
+      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    });
+    browser._wikiSelect.value = 'test';
+    await browser.refreshGitStatus();
+
+    const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
+    expect(gitStatusEl?.textContent).toContain('main');
+    expect(gitStatusEl?.textContent).toContain('↑3');
+    expect(gitStatusEl?.textContent).toContain('↓1');
+  });
+
+  it('should display dirty indicator when repo is dirty', async () => {
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'develop',
+      ahead: 0,
+      behind: 0,
+      dirty: true,
+      untracked: 2
+    });
+
+    browser.populateWikis({
+      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    });
+    browser._wikiSelect.value = 'test';
+    await browser.refreshGitStatus();
+
+    const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
+    expect(gitStatusEl?.textContent).toContain('develop');
+    expect(gitStatusEl?.textContent).toContain('●');
+  });
+
+  it('should clear git status when no wiki is selected', async () => {
+    await browser.refreshGitStatus();
+
+    const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
+    expect(gitStatusEl?.textContent).toBe('—');
+  });
+
+  it('should handle git status API error gracefully', async () => {
+    (getGitStatus as jest.Mock).mockRejectedValueOnce(
+      new Error('Network error')
+    );
+
+    browser.populateWikis({
+      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    });
+    browser._wikiSelect.value = 'test';
+    await browser.refreshGitStatus();
+
+    const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
+    expect(gitStatusEl?.textContent).toBe('error');
+  });
+
+  // ── Git pull ───────────────────────────────────────────────────────────
+
+  it('should call gitPull when pull button is clicked', async () => {
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main',
+      ahead: 0,
+      behind: 0,
+      dirty: false,
+      untracked: 0
+    });
+    (gitPull as jest.Mock).mockResolvedValueOnce({
+      message: 'Git pull successful'
+    });
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
+
+    browser.populateWikis({
+      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    });
+    browser._wikiSelect.value = 'test';
+    await browser.refreshGitStatus();
+
+    const pullBtn = browser.node.querySelector(
+      '.jp-WikiBrowser-gitBtn'
+    ) as HTMLButtonElement;
+    expect(pullBtn.disabled).toBe(false);
+    pullBtn.click();
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(gitPull).toHaveBeenCalledWith('test', mockServerSettings);
+  });
+
+  // ── Git push ───────────────────────────────────────────────────────────
+
+  it('should call gitPush when push button is clicked', async () => {
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main',
+      ahead: 0,
+      behind: 0,
+      dirty: false,
+      untracked: 0
+    });
+    (gitPush as jest.Mock).mockResolvedValueOnce({
+      message: 'Git push successful'
+    });
+
+    browser.populateWikis({
+      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    });
+    browser._wikiSelect.value = 'test';
+    await browser.refreshGitStatus();
+
+    const pushBtn = browser.node.querySelectorAll(
+      '.jp-WikiBrowser-gitBtn'
+    )[1] as HTMLButtonElement;
+    expect(pushBtn.disabled).toBe(false);
+    pushBtn.click();
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(gitPush).toHaveBeenCalledWith('test', mockServerSettings);
   });
 });
