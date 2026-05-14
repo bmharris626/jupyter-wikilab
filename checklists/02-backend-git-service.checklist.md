@@ -9,7 +9,7 @@ Add git-specific operations behind a service abstraction.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_detect_or_init_repo`
   - **Commit suggestion:** `feat(git): add repository detect/init helper`
 
-- [ ] **Implement commit identity construction**
+- [x] **Implement commit identity construction**
   - **Task:** Build Actor from `JUPYTERHUB_USER` and configured email.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_commit_actor_identity`
   - **Commit suggestion:** `feat(git): derive commit identity from user and settings`
