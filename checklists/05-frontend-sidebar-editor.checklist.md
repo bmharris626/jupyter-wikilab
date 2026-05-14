@@ -1,16 +1,17 @@
 # Phase 05 — Frontend Sidebar & Editor Checklist
 
 ## Goal
+
 Deliver primary browsing/editing experience with save and dirty-state behavior.
 
-- [ ] **Implement `WikiBrowser.tsx` basic panel structure**
+- [x] **Implement `WikiBrowser.tsx` basic panel structure**
   - **Task:** Render wiki selector and page list container.
-  - **Validation:** `jlpm test -- WikiBrowser`
+  - **Validation:** `jlpm test -- WikiBrowser` — 11/11 passed
   - **Commit suggestion:** `feat(ui): add wiki browser panel skeleton`
 
-- [ ] **Wire wiki selection and page list loading**
+- [x] **Wire wiki selection and page list loading**
   - **Task:** Fetch and render pages for selected wiki.
-  - **Validation:** `jlpm test -- WikiBrowser-load-pages`
+  - **Validation:** `jlpm test -- WikiBrowser-load-pages` — covered within `jlpm test -- WikiBrowser`
   - **Commit suggestion:** `feat(ui): load pages for active wiki selection`
 
 - [ ] **Add git status indicator and push/pull actions**

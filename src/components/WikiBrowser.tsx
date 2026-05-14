@@ -1,0 +1,284 @@
+/**
+ * WikiBrowser — Left sidebar panel for wiki browsing.
+ *
+ * Displays a wiki selector dropdown and a scrollable page list.
+ * Serves as the primary navigation surface inside JupyterLab.
+ *
+ * ## Structure
+ *
+ * ```
+ * ┌──────────────────────────┐
+ * │ [Wiki Selector Dropdown] │
+ * ├──────────────────────────┤
+ * │                          │
+ * │  Page List (scrollable)  │
+ * │                          │
+ * └──────────────────────────┘
+ * ```
+ *
+ * Git status controls and page actions are added in later phases.
+ */
+
+import { Panel, PanelLayout } from '@lumino/widgets';
+
+import { ServerConnection } from '@jupyterlab/services';
+
+import { listPages } from '../wikiApi';
+import type { WikiInfo, PageEntry } from '../types';
+
+// ── CSS class namespace ─────────────────────────────────────────────────────
+
+const CSS_PREFIX = 'jp-WikiBrowser';
+
+// ── Public interface ────────────────────────────────────────────────────────
+
+/**
+ * Data exposed by the WikiBrowser panel.
+ */
+export interface IBrowserPanel {
+  /** Currently selected wiki ID (empty string when none selected). */
+  readonly activeWikiId: string;
+  /** List of pages belonging to the active wiki. */
+  readonly pages: PageEntry[];
+}
+
+/** Arguments carried by the wiki-selected event. */
+export interface WikiSelectedArgs {
+  name: 'wikiSelected';
+  newValue: string;
+  oldValue: string;
+}
+
+// ── WikiBrowser widget ──────────────────────────────────────────────────────
+
+/**
+ * Sidebar panel that shows a wiki selector and the corresponding page list.
+ *
+ * The component follows a simple event-driven pattern: when the user picks
+ * a wiki from the dropdown the widget fires a {@link WikiBrowser.wikiSelected}
+ * signal. The parent (usually `index.ts`) listens to this signal and calls
+ * {@link WikiBrowser.loadPages} to populate the list.
+ */
+export class WikiBrowser extends Panel implements IBrowserPanel {
+  // ── Construction ───────────────────────────────────────────────────────
+
+  /**
+   * Construct the wiki browser panel.
+   */
+  constructor() {
+    super();
+    this.addClass(CSS_PREFIX);
+    this.title.caption = 'Wiki Browser';
+    this.title.iconClass = 'lm-CommandPalette-icon';
+
+    // Panel already has a PanelLayout; cast it to add children.
+    const layout = this.layout as PanelLayout;
+
+    this._createToolbar();
+    this._createPageList();
+
+    layout.addWidget(this._toolbar);
+    layout.addWidget(this._pagePanel);
+  }
+
+  // ── IBrowserPanel ──────────────────────────────────────────────────────
+
+  get activeWikiId(): string {
+    return this._wikiSelect.value;
+  }
+
+  get pages(): PageEntry[] {
+    return this._pages;
+  }
+
+  // ── Public API ─────────────────────────────────────────────────────────
+
+  /**
+   * Fetch and render the page list for the currently selected wiki.
+   *
+   * If no wiki is selected the list is cleared and a placeholder
+   * message is shown.
+   */
+  async loadPages(): Promise<void> {
+    const wikiId = this.activeWikiId;
+
+    if (!wikiId) {
+      this._pages = [];
+      this._clearPageList();
+      this._showPlaceholder('Select a wiki to browse its pages.');
+      return;
+    }
+
+    this._showPlaceholder('Loading pages…');
+
+    if (!this._serverSettings) {
+      this._showPlaceholder('Server settings not initialized.');
+      return;
+    }
+
+    try {
+      const response = await listPages(wikiId, this._serverSettings);
+      this._pages = response.pages;
+      this._renderPageList();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this._showPlaceholder(`Failed to load pages: ${message}`);
+      this._pages = [];
+    }
+  }
+
+  // ── Signals ────────────────────────────────────────────────────────────
+
+  /**
+   * Signal fired when the user selects a different wiki from the dropdown.
+   */
+  wikiSelected: WikiSelectedArgs = {
+    name: 'wikiSelected',
+    newValue: '',
+    oldValue: ''
+  };
+
+  /** Emit a wiki-selected signal with the given values. */
+  _emitWikiSelected(newValue: string): void {
+    this.wikiSelected.oldValue = this.wikiSelected.newValue;
+    this.wikiSelected.newValue = newValue;
+  }
+
+  // ── Widget lifecycle ───────────────────────────────────────────────────
+
+  /**
+   * Dispose of the widget and release resources.
+   */
+  dispose(): void {
+    this._wikiSelect.removeEventListener('change', this._onWikiChange);
+    super.dispose();
+  }
+
+  // ── Private helpers ────────────────────────────────────────────────────
+
+  /** JupyterLab server settings — set by the plugin activator. */
+  set serverSettings(settings: ServerConnection.ISettings) {
+    this._serverSettings = settings;
+  }
+
+  private _serverSettings: ServerConnection.ISettings | null = null;
+  private _pages: PageEntry[] = [];
+
+  // ── DOM construction ───────────────────────────────────────────────────
+
+  private _toolbar!: Panel;
+  _wikiSelect!: HTMLSelectElement; // internal — accessible to tests
+  private _pagePanel!: Panel;
+  private _pageList!: HTMLUListElement;
+  private _placeholder!: HTMLDivElement;
+
+  private _onWikiChange = (): void => {
+    const prev = this.wikiSelected.newValue;
+    this.wikiSelected.oldValue = prev;
+    this.wikiSelected.newValue = this.activeWikiId;
+
+    if (prev !== this.activeWikiId) {
+      void this.loadPages();
+    }
+  };
+
+  private _createToolbar(): void {
+    this._toolbar = new Panel();
+    this._toolbar.addClass(`${CSS_PREFIX}-toolbar`);
+
+    const label = document.createElement('label');
+    label.textContent = 'Wiki:';
+    label.className = `${CSS_PREFIX}-wikiLabel`;
+
+    this._wikiSelect = document.createElement('select');
+    this._wikiSelect.className = `${CSS_PREFIX}-wikiSelect`;
+    this._wikiSelect.setAttribute('aria-label', 'Select a wiki');
+
+    // Default "no wiki" option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = '— Select a wiki —';
+    this._wikiSelect.appendChild(defaultOption);
+
+    this._wikiSelect.addEventListener('change', this._onWikiChange);
+    this._toolbar.node.appendChild(label);
+    this._toolbar.node.appendChild(this._wikiSelect);
+  }
+
+  /** Populate the wiki selector dropdown from the registry. */
+  populateWikis(wikis: Record<string, WikiInfo>): void {
+    const select = this._wikiSelect;
+
+    // Save current selection before removing options (removal resets value to "")
+    const current = select.value;
+
+    // Remove all options except the first (default)
+    while (select.options.length > 1) {
+      select.remove(1);
+    }
+
+    for (const [id, info] of Object.entries(wikis)) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = info.name;
+      select.appendChild(opt);
+    }
+
+    // Restore previous selection if it still exists
+    const options = Array.from(select.options);
+    if (current && options.some(o => o.value === current && o.value !== '')) {
+      select.value = current;
+    }
+  }
+
+  private _createPageList(): void {
+    this._pagePanel = new Panel();
+    this._pagePanel.addClass(`${CSS_PREFIX}-pagePanel`);
+
+    this._pageList = document.createElement('ul');
+    this._pageList.className = `${CSS_PREFIX}-pageList`;
+    this._pageList.setAttribute('role', 'list');
+
+    this._placeholder = document.createElement('div');
+    this._placeholder.className = `${CSS_PREFIX}-placeholder`;
+
+    this._pagePanel.node.appendChild(this._pageList);
+    this._pagePanel.node.appendChild(this._placeholder);
+  }
+
+  private _clearPageList(): void {
+    this._pageList.innerHTML = '';
+  }
+
+  private _showPlaceholder(text: string): void {
+    this._placeholder.textContent = text;
+    this._placeholder.style.display = 'block';
+    this._clearPageList();
+  }
+
+  private _renderPageList(): void {
+    this._placeholder.style.display = 'none';
+    this._clearPageList();
+
+    if (this._pages.length === 0) {
+      this._showPlaceholder('No pages in this wiki.');
+      return;
+    }
+
+    for (const page of this._pages) {
+      const li = document.createElement('li');
+      li.className = `${CSS_PREFIX}-pageItem`;
+      li.setAttribute('role', 'listitem');
+
+      const link = document.createElement('a');
+      link.href = '#';
+      link.className = `${CSS_PREFIX}-pageLink`;
+      link.textContent = page.title || page.slug;
+      link.setAttribute('data-slug', page.slug);
+      link.setAttribute('title', `Open ${page.title || page.slug}`);
+
+      li.appendChild(link);
+      this._pageList.appendChild(li);
+    }
+  }
+}
