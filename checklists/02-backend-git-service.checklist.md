@@ -1,9 +1,10 @@
 # Phase 02 — Backend Git Service Checklist
 
 ## Goal
+
 Add git-specific operations behind a service abstraction.
 
-- [ ] **Implement git repository detection/init helper**
+- [x] **Implement git repository detection/init helper**
   - **Task:** Add utility to detect `.git` and optionally initialize repository when requested.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_detect_or_init_repo`
   - **Commit suggestion:** `feat(git): add repository detect/init helper`
@@ -13,7 +14,7 @@ Add git-specific operations behind a service abstraction.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_commit_actor_identity`
   - **Commit suggestion:** `feat(git): derive commit identity from user and settings`
 
-- [ ] **Implement page commit method**
+- [x] **Implement page commit method**
   - **Task:** Commit page updates with standard message template.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_commit_page_update_message`
   - **Commit suggestion:** `feat(git): implement page update commit operation`
@@ -33,7 +34,7 @@ Add git-specific operations behind a service abstraction.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_backlinks_grep_results`
   - **Commit suggestion:** `feat(git): add backlinks lookup via git grep`
 
-- [ ] **Implement remote status/pull/push wrappers**
+- [x] **Implement remote status/pull/push wrappers**
   - **Task:** Add ahead/behind status plus pull/push methods with clear error propagation.
   - **Validation:** `pytest -q tests/python/test_git_service.py::test_remote_status_pull_push_wrappers`
   - **Commit suggestion:** `feat(git): implement remote status and sync operations`
