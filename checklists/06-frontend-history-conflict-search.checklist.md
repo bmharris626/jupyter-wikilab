@@ -1,11 +1,12 @@
 # Phase 06 — History, Conflict, and Search UI Checklist
 
 ## Goal
+
 Implement advanced read/reconcile workflows for a git-backed wiki.
 
-- [ ] **Implement `PageHistory.tsx` commit list**
+- [x] **Implement `PageHistory.tsx` commit list**
   - **Task:** Render history entries for current page.
-  - **Validation:** `jlpm test -- PageHistory-list`
+  - **Validation:** `jlpm test -- PageHistory` — 14/14 passed
   - **Commit suggestion:** `feat(ui): add page history commit list`
 
 - [ ] **Implement historical content view**
