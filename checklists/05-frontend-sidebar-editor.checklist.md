@@ -34,7 +34,7 @@ Deliver primary browsing/editing experience with save and dirty-state behavior.
   - **Validation:** `jlpm test` — 64/64 passed (6 original + 6 new save tests), 92.43% coverage on WikiEditor.tsx
   - **Commit suggestion:** `feat(ui): implement editor save action, Ctrl+S, and dirty-state tracking`
 
-- [ ] **Add dirty-state and unload/close warnings**
+- [x] **Add dirty-state and unload/close warnings**
   - **Task:** Track unsaved edits and warn before leaving.
-  - **Validation:** `jlpm test -- WikiEditor-dirty-state`
-  - **Commit suggestion:** `feat(ui): add unsaved-change detection and warnings`
+  - **Validation:** `jlpm test` — 67/67 passed; `npx tsc --noEmit` clean
+  - **Commit suggestion:** `feat(ui): add unsaved-change warnings and page-switch save prompt`

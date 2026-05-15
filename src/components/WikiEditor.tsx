@@ -209,14 +209,19 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
     this._saveStatus.textContent = '';
   }
 
-  private async _handleSave(): Promise<void> {
+  /**
+   * Save the current page content.
+   *
+   * @returns `true` if save succeeded, `false` otherwise.
+   */
+  async save(): Promise<boolean> {
     if (
       !this._wikiId ||
       !this._slug ||
       !this._serverSettings ||
       !this._isDirty
     ) {
-      return;
+      return false;
     }
 
     this._saveBtn.textContent = 'Saving…';
@@ -236,11 +241,13 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
       // The backend commit SHA is not returned, so we refresh the page to get it.
       this._currentSha = undefined;
       this._updateSaveButton();
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       this._saveStatus.textContent = `Save failed: ${message}`;
       this._saveStatus.style.color = 'var(--jp-error-color1)';
       this._updateSaveButton();
+      return false;
     } finally {
       this._saveBtn.textContent = this._isDirty ? 'Save *' : 'Save';
       this._saveBtn.disabled = false;
@@ -323,7 +330,7 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
           key: 'Ctrl-S',
           mac: 'Cmd-S',
           run: () => {
-            void this._handleSave();
+            void this.save();
             return true;
           }
         }
@@ -363,7 +370,7 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
     this._saveBtn.className = `${CSS_PREFIX}-saveBtn`;
     this._saveBtn.textContent = 'Save';
     this._saveBtn.setAttribute('aria-label', 'Save page (Ctrl+S)');
-    this._saveBtn.addEventListener('click', () => void this._handleSave());
+    this._saveBtn.addEventListener('click', () => void this.save());
     toolbar.appendChild(this._saveBtn);
 
     // Save status indicator

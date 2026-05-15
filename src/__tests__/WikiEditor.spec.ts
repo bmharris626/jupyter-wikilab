@@ -275,7 +275,7 @@ describe('WikiEditor', () => {
     expect(saveBtn?.textContent).toBe('Save *');
 
     // Simulate save
-    await (editor as any)._handleSave();
+    await editor.save();
 
     expect(savePage).toHaveBeenCalledWith(
       'wiki-a',
@@ -289,5 +289,41 @@ describe('WikiEditor', () => {
       '.jp-WikiEditor-saveBtn'
     ) as HTMLButtonElement;
     expect(saveBtn?.textContent).toBe('Save');
+  });
+
+  it('save() returns true on success', async () => {
+    (savePage as jest.Mock).mockResolvedValueOnce({ message: 'saved' });
+    const mockServerSettings: ServerConnection.ISettings =
+      ServerConnection.makeSettings();
+    const editor = createFixture();
+    editor.serverSettings = mockServerSettings;
+    editor.setPage('wiki-a', 'test-page', 'sha1');
+    editor.setContent('new content', true);
+
+    const result = await editor.save();
+    expect(result).toBe(true);
+  });
+
+  it('save() returns false when not dirty', async () => {
+    const editor = createFixture();
+    const result = await editor.save();
+    expect(result).toBe(false);
+  });
+
+  it('save() returns false on conflict (409)', async () => {
+    const mockSettings: ServerConnection.ISettings =
+      ServerConnection.makeSettings();
+    const mockError = Object.assign(new Error('Conflict'), {
+      response: { status: 409 }
+    } as Partial<Error>);
+    (savePage as jest.Mock).mockRejectedValueOnce(mockError);
+
+    const editor = createFixture();
+    editor.serverSettings = mockSettings;
+    editor.setPage('wiki-a', 'test-page', 'sha1');
+    editor.setContent('new content', true);
+
+    const result = await editor.save();
+    expect(result).toBe(false);
   });
 });
