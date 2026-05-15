@@ -33,9 +33,9 @@ export interface IWikiBrowser {
   loadPage: (slug: string) => Promise<string>;
 
   /**
-   * Get the list of page entries for the currently active wiki.
+   * List of page entries for the currently active wiki.
    */
-  getPages: () => readonly import('./types').PageEntry[];
+  readonly pages: import('./types').PageEntry[];
 }
 
 /** Plugin token for the WikiBrowser sidebar service. */
@@ -63,9 +63,9 @@ export interface IWikiEditor {
 
   /**
    * Persist the current editor content to the wiki repository.
-   * Returns the new HEAD SHA on success.
+   * @returns A promise that resolves to true when save succeeds.
    */
-  save: () => Promise<string>;
+  save: () => Promise<boolean>;
 }
 
 /** Plugin token for the WikiEditor main-area service. */
