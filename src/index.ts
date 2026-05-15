@@ -245,3 +245,8 @@ const settingsPlugin: JupyterFrontEndPlugin<void> = {
 };
 
 export { plugin, editorPlugin, settingsPlugin };
+
+// JupyterLab expects the frontend entrypoint to default-export either
+// a single plugin object or an array of plugin objects.
+// Export all three plugins as the default extension bundle.
+export default [plugin, editorPlugin, settingsPlugin];
