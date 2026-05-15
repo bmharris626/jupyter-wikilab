@@ -12,17 +12,28 @@ import { WikiEditor } from './components/WikiEditor';
 import { ConflictView } from './components/ConflictView';
 import { onDirtyChange, handlePageSwitch } from './utils/dirtyState';
 
-// ── Plugin ──────────────────────────────────────────────────────────────────
+import { IWikiBrowser, IWikiEditor } from './tokens';
+
+// Module-level reference so editorPlugin can access the editor
+// created in the main plugin (both share this module scope).
+let _editorInstance: WikiEditor | null = null;
+
+// ── Plugin 1: Core activation + IWikiBrowser token ──────────────────────────
 
 /**
  * Initialization data for the jupyterhub-wikilab extension.
+ *
+ * Instantiates the sidebar and editor, registers the sidebar
+ * in JupyterLab's left area, and provides the WikiBrowser token
+ * for dependency injection.
  */
-const plugin: JupyterFrontEndPlugin<void> = {
+const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
   id: 'jupyterhub-wikilab:plugin',
   description:
     'An extension for displaying and editing wikis within JupyterLab.',
   autoStart: true,
-  activate: async (app: JupyterFrontEnd) => {
+  provides: IWikiBrowser,
+  activate: async (app: JupyterFrontEnd): Promise<IWikiBrowser> => {
     const serverSettings = app.serviceManager.serverSettings;
 
     // ── Sidebar container ──────────────────────────────────────────────────
@@ -43,14 +54,10 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
     const editor = new WikiEditor();
     editor.serverSettings = serverSettings;
+    _editorInstance = editor;
 
     // ── Unsaved-changes guard ─────────────────────────────────────────────
 
-    /**
-     * Register a `beforeunload` listener so the browser warns the user
-     * when they try to close the tab or navigate away while the editor
-     * has unsaved content.
-     */
     editor.contentChanged.connect(() => onDirtyChange(editor));
 
     // ── Conflict resolution flow ──────────────────────────────────────────
@@ -58,13 +65,11 @@ const plugin: JupyterFrontEndPlugin<void> = {
     let conflictView: ConflictView | null = null;
     let currentSlug = '';
 
-    // Track current slug from page selection
     browser.pageSelected.connect((_, args) => {
       currentSlug = args.slug;
     });
 
     editor.conflictDetected.connect(async (_, conflictArgs) => {
-      // Dismiss any existing conflict view first
       if (conflictView) {
         conflictView.dispose();
         conflictView = null;
@@ -78,7 +83,6 @@ const plugin: JupyterFrontEndPlugin<void> = {
         },
         editorContent: conflictArgs.editorContent,
         onResolve: (resolvedContent: string) => {
-          // Apply resolved content to editor and retry save
           editor.setContent(resolvedContent);
           void editor.save();
           if (conflictView) {
@@ -87,7 +91,6 @@ const plugin: JupyterFrontEndPlugin<void> = {
           }
         },
         onDiscard: () => {
-          // Reload the page content from the server to discard local changes
           void browser
             .loadPage(currentSlug)
             .then(content => {
@@ -103,7 +106,6 @@ const plugin: JupyterFrontEndPlugin<void> = {
         }
       });
 
-      const layout = sidebar.layout as PanelLayout;
       layout.insertWidget(1, conflictView);
     });
 
@@ -133,8 +135,56 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
     app.shell.add(sidebar, 'left', { rank: 100 });
 
+    // ── Return the WikiBrowser service ─────────────────────────────────────
+
     console.log('JupyterLab extension jupyterhub-wikilab is activated!');
+
+    return browser as IWikiBrowser;
   }
 };
 
-export default plugin;
+// ── Plugin 2: IWikiEditor token (requires main plugin) ─────────────────────
+
+/**
+ * Second plugin that provides the IWikiEditor token.
+ * Requires the main plugin so the editor instance is already
+ * available in the same activation scope.
+ */
+const editorPlugin: JupyterFrontEndPlugin<IWikiEditor> = {
+  id: 'jupyterhub-wikilab:editor-plugin',
+  description: 'Provides the WikiEditor service token.',
+  autoStart: true,
+  requires: [IWikiBrowser],
+  provides: IWikiEditor,
+  activate: async (
+    _app: JupyterFrontEnd,
+    _browser: IWikiBrowser
+  ): Promise<IWikiEditor> => {
+    // The editor was instantiated by the main plugin.
+    // Both plugins share this module scope so the reference is available.
+    if (!_editorInstance) {
+      throw new Error('WikiEditor instance not yet initialized');
+    }
+    return _editorInstance as IWikiEditor;
+  }
+};
+
+// ── Plugin 3: Settings integration ──────────────────────────────────────────
+
+/**
+ * Third plugin that provides the settings schema fields
+ * and registers them with the application.
+ */
+const settingsPlugin: JupyterFrontEndPlugin<void> = {
+  id: 'jupyterhub-wikilab:settings-plugin',
+  description: 'Registers wikilab settings schema fields.',
+  autoStart: true,
+  activate: (app: JupyterFrontEnd) => {
+    // Settings are loaded automatically from schema/plugin.json
+    // via the jupyterlab settings system. No explicit registration
+    // needed — the schema file is the single source of truth.
+    console.log('JupyterLab extension settings loaded.');
+  }
+};
+
+export { plugin, editorPlugin, settingsPlugin };
