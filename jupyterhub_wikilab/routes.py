@@ -156,11 +156,16 @@ class WikiPageContentHandler(APIHandler):
         try:
             async with lock:
                 success = save_page(wiki_id, slug, content, head_sha)
-        except ConflictError:
+        except ConflictError as exc:
             self.set_status(409)
-            self.finish(
-                json.dumps({"error": "Stale write detected, page was modified"})
-            )
+            response = {
+                "error": "Stale write detected, page was modified",
+            }
+            if exc.base_content is not None:
+                response["base_content"] = exc.base_content
+            if exc.their_content is not None:
+                response["their_content"] = exc.their_content
+            self.finish(json.dumps(response))
             return
 
         if success:

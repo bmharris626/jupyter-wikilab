@@ -14,9 +14,9 @@ Implement advanced read/reconcile workflows for a git-backed wiki.
   - **Validation:** `jlpm test -- PageHistory` — 19/19 passed (5 new content panel tests)
   - **Commit suggestion:** `feat(ui): add historical content view with backend route`
 
-- [ ] **Implement `ConflictView.tsx` layout**
+- [x] **Implement `ConflictView.tsx` layout**
   - **Task:** Render base/yours/theirs panes for 409 payload.
-  - **Validation:** `jlpm test -- ConflictView-layout`
+  - **Validation:** `jlpm test -- ConflictView` — 16/16 passed, 100% coverage
   - **Commit suggestion:** `feat(ui): add conflict view for stale-write responses`
 
 - [ ] **Implement conflict resolution actions**

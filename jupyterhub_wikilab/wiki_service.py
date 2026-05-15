@@ -12,9 +12,22 @@ from .wiki_registry import listwikis, addwiki, removewiki, validate_path_access
 
 
 class ConflictError(Exception):
-    """Raised when a write conflicts with the current HEAD SHA."""
+    """Raised when a write conflicts with the current HEAD SHA.
 
-    pass
+    Attributes:
+        base_content: The common ancestor content (from head_sha commit).
+        their_content: The current on-disk content (from current HEAD).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        base_content: Optional[str] = None,
+        their_content: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.base_content = base_content
+        self.their_content = their_content
 
 
 def slugify(title: str) -> str:
@@ -244,13 +257,20 @@ def save_page(
 
     # Conflict detection: verify head_sha matches current HEAD if provided
     if head_sha:
-        from .git_service import get_page_sha
+        from .git_service import get_page_content_at_sha, get_page_sha
 
         current_sha = get_page_sha(wiki_id, slug)
         if current_sha and current_sha != head_sha:
+            # Read base content (from the commit the user started editing)
+            page_name = slug if slug.endswith(".md") else f"{slug}.md"
+            base_content = get_page_content_at_sha(str(wiki_path), page_name, head_sha)
+            # Read their content (current on-disk content)
+            their_content = get_page_content(wiki_id, slug)
             raise ConflictError(
                 f"Stale write detected: expected SHA {head_sha}, "
-                f"current HEAD is {current_sha}"
+                f"current HEAD is {current_sha}",
+                base_content=base_content,
+                their_content=their_content,
             )
 
     page_path = get_page_path(wiki_path, slug)
