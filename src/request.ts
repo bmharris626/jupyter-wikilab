@@ -18,7 +18,8 @@ export async function requestAPI<T>(
   // Make request to Jupyter API
   const requestUrl = URLExt.join(
     serverSettings.baseUrl,
-    'jupyterhub-wikilab', // our server extension's API namespace
+    'wikilab',
+    'api',
     endPoint
   );
 
@@ -39,7 +40,7 @@ export async function requestAPI<T>(
     try {
       data = JSON.parse(data);
     } catch (error) {
-      console.log('Not a JSON response body.', response);
+      console.warn('Not a JSON response body.', response);
     }
   }
 

@@ -18,7 +18,7 @@ import { onDirtyChange, handlePageSwitch } from './utils/dirtyState';
 
 import { IWikiBrowser, IWikiEditor } from './tokens';
 
-import { registerCommands } from './commands';
+import { registerCommands, setReloadWikis } from './commands';
 
 // Module-level reference so editorPlugin can access the editor
 // created in the main plugin (both share this module scope).
@@ -58,6 +58,18 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
     // ── Register all commands ──────────────────────────────────────────────
 
     registerCommands(app);
+
+    // ── Register wiki-reload callback ──────────────────────────────────────
+
+    setReloadWikis(() => {
+      void listWikis(serverSettings)
+        .then(response => {
+          browser.populateWikis(response.wikis);
+        })
+        .catch(() => {
+          // Reload failed — keep current list
+        });
+    });
 
     // ── Sidebar container (left area) ──────────────────────────────────────
 

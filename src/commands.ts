@@ -10,6 +10,9 @@
 
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { ReadonlyPartialJSONObject } from '@lumino/coreutils';
+import { ServerConnection } from '@jupyterlab/services';
+
+import { RegisterWikiDialog } from './components/RegisterWikiDialog';
 
 // ── Command IDs ─────────────────────────────────────────────────────────────
 
@@ -41,6 +44,24 @@ export namespace CommandIDs {
 
   /** Pull latest changes from the remote wiki repository. */
   export const pullWiki = 'jupyterhub-wikilab:pull-wiki';
+}
+
+// ── Command argument types ──────────────────────────────────────────────────
+
+/** Module-level reference to the active dialog (avoids duplicates). */
+let _activeDialog: RegisterWikiDialog | null = null;
+
+/** Callback registered by the main plugin to reload the wiki list. */
+let _reloadWikis: (() => void) | null = null;
+
+/**
+ * Register the wiki-reload callback from the main plugin.
+ * Called once during plugin activation so the dialog can refresh
+ * the browser after a successful registration.
+ * @internal
+ */
+export function setReloadWikis(callback: (() => void) | null): void {
+  _reloadWikis = callback;
 }
 
 // ── Command argument types ──────────────────────────────────────────────────
@@ -126,7 +147,13 @@ export function registerCommands(app: JupyterFrontEnd): void {
   app.commands.addKeyBinding({
     command: CommandIDs.savePage,
     keys: ['Ctrl+S'],
-    selector: '.jp-WikiEditor, #wikilab-editor'
+    selector: '.jp-WikiEditor'
+  });
+
+  app.commands.addKeyBinding({
+    command: CommandIDs.savePage,
+    keys: ['Ctrl+S'],
+    selector: '#wikilab-editor'
   });
 
   // ── Rename page ─────────────────────────────────────────────────────────
@@ -170,9 +197,27 @@ export function registerCommands(app: JupyterFrontEnd): void {
     label: 'Register New Wiki',
     caption: 'Register a new wiki repository',
     isEnabled: () => true,
-    execute: (args: ReadonlyPartialJSONObject) => {
-      const typedArgs = args as unknown as CommandArguments.IRegisterWiki;
-      console.log(`[wikilab] register wiki: ${typedArgs.name}`);
+    execute: () => {
+      // Close any existing dialog to avoid duplicates
+      if (_activeDialog) {
+        _activeDialog.dispose();
+        _activeDialog = null;
+      }
+
+      const serverSettings = app.serviceManager
+        .serverSettings as ServerConnection.ISettings;
+
+      _activeDialog = new RegisterWikiDialog({
+        serverSettings,
+        onRegistered: () => {
+          _activeDialog = null;
+          if (_reloadWikis) {
+            _reloadWikis();
+          }
+        }
+      });
+
+      app.shell.add(_activeDialog, 'main', { rank: 1000 });
     }
   });
 
