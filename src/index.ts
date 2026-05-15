@@ -14,6 +14,8 @@ import { onDirtyChange, handlePageSwitch } from './utils/dirtyState';
 
 import { IWikiBrowser, IWikiEditor } from './tokens';
 
+import { registerCommands } from './commands';
+
 // Module-level reference so editorPlugin can access the editor
 // created in the main plugin (both share this module scope).
 let _editorInstance: WikiEditor | null = null;
@@ -35,6 +37,10 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
   provides: IWikiBrowser,
   activate: async (app: JupyterFrontEnd): Promise<IWikiBrowser> => {
     const serverSettings = app.serviceManager.serverSettings;
+
+    // ── Register all commands ──────────────────────────────────────────────
+
+    registerCommands(app);
 
     // ── Sidebar container ──────────────────────────────────────────────────
 
