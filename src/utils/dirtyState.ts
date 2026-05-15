@@ -29,14 +29,11 @@ export function onDirtyChange(editor: IDirtyEditor): void {
   }
 
   if (editor.isDirty) {
-    const handler = (): void => {
-      const e = window.event as BeforeUnloadEvent | undefined;
-      if (e) {
-        e.preventDefault();
-        e.returnValue = ''; // Required by Chrome
-      }
+    const handler = (e: BeforeUnloadEvent): void => {
+      e.preventDefault();
+      e.returnValue = ''; // Required by Chrome
     };
-    window.addEventListener('beforeunload', handler);
+    window.addEventListener('beforeunload', handler as EventListener);
     win[storageKey] = handler;
   } else {
     win[storageKey] = undefined;

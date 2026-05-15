@@ -116,6 +116,26 @@ describe('onDirtyChange', () => {
     onDirtyChange(editor);
     expect(win[storageKey]).toBeUndefined();
   });
+
+  it('invokes preventDefault and sets returnValue on the event', () => {
+    const editor = createEditor({ isDirty: true });
+    onDirtyChange(editor);
+
+    const storageKey = '__wikilabBeforeUnloadHandler';
+    const win = window as unknown as Record<string, unknown>;
+    const handler = win[storageKey] as (e: BeforeUnloadEvent) => void;
+    expect(typeof handler).toBe('function');
+
+    const mockEvent = {
+      preventDefault: jest.fn(),
+      returnValue: ''
+    } as unknown as BeforeUnloadEvent;
+
+    handler(mockEvent);
+
+    expect(mockEvent.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mockEvent.returnValue).toBe('');
+  });
 });
 
 // ── handlePageSwitch tests ──────────────────────────────────────────────────
