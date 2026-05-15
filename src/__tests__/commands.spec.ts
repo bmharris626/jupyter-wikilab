@@ -18,7 +18,14 @@ interface CommandMeta {
   isEnabled: () => boolean;
 }
 
+interface KeyBinding {
+  command: string;
+  keys: string[];
+  selector: string;
+}
+
 const registeredCommands = new Map<string, CommandMeta>();
+const registeredKeyBindings: KeyBinding[] = [];
 
 function createMockApp(): JupyterFrontEnd {
   const commands = {
@@ -31,6 +38,17 @@ function createMockApp(): JupyterFrontEnd {
         caption: options.caption,
         isEnabled: options.isEnabled
       });
+    },
+    addKeyBinding(binding: {
+      command: string;
+      keys: string[];
+      selector: string;
+    }) {
+      registeredKeyBindings.push({
+        command: binding.command,
+        keys: binding.keys,
+        selector: binding.selector
+      });
     }
   };
 
@@ -42,12 +60,14 @@ function createMockApp(): JupyterFrontEnd {
 describe('registerCommands', () => {
   beforeEach(() => {
     registeredCommands.clear();
+    registeredKeyBindings.length = 0;
     const mockApp = createMockApp();
     registerCommands(mockApp);
   });
 
   afterEach(() => {
     registeredCommands.clear();
+    registeredKeyBindings.length = 0;
   });
 
   it('registers the openSidebar command', () => {
@@ -125,5 +145,13 @@ describe('registerCommands', () => {
     for (const id of allIds) {
       expect(id).toMatch(/^jupyterhub-wikilab:/);
     }
+  });
+
+  it('registers a Ctrl+S keybinding for savePage', () => {
+    const saveBinding = registeredKeyBindings.find(
+      b => b.command === CommandIDs.savePage && b.keys.includes('Ctrl+S')
+    );
+    expect(saveBinding).toBeDefined();
+    expect(saveBinding?.selector).toMatch(/wikilab/);
   });
 });

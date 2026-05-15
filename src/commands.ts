@@ -121,6 +121,14 @@ export function registerCommands(app: JupyterFrontEnd): void {
     }
   });
 
+  // ── Ctrl+S keyboard shortcut for save ───────────────────────────────────
+
+  app.commands.addKeyBinding({
+    command: CommandIDs.savePage,
+    keys: ['Ctrl+S'],
+    selector: '.jp-WikiEditor, #wikilab-editor'
+  });
+
   // ── Rename page ─────────────────────────────────────────────────────────
 
   app.commands.addCommand(CommandIDs.renamePage, {
