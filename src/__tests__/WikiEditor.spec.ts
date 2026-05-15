@@ -117,6 +117,30 @@ describe('WikiEditor', () => {
     expect(render).toHaveBeenCalledWith('**bold**');
   });
 
+  it('addToHistory: true records a history step (undo reverts)', () => {
+    const editor = createFixture();
+    editor.setContent('version A', true);
+    expect(editor.content).toBe('version A');
+    editor.undo();
+    expect(editor.content).toBe('');
+  });
+
+  it('addToHistory: false does NOT record a history step', () => {
+    const editor = createFixture();
+    // First set with addToHistory: true, then undo to verify it was recorded
+    editor.setContent('version A', true);
+    editor.undo();
+    expect(editor.content).toBe('');
+
+    // Now set with addToHistory: false
+    editor.setContent('version B', false);
+    expect(editor.content).toBe('version B');
+
+    // Undo should NOT revert to empty — "version B" was not recorded
+    editor.undo();
+    expect(editor.content).toBe('version B');
+  });
+
   // ── Signals ───────────────────────────────────────────────────────────
 
   it('emits contentChanged on setContent', () => {

@@ -19,13 +19,18 @@
  * The split ratio is adjustable by dragging the divider.
  */
 
-// State utilities available via @codemirror/state for future extensions
+import { Transaction } from '@codemirror/state';
 
 import { EditorView, ViewUpdate } from '@codemirror/view';
 
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 
-import { defaultKeymap, history, indentWithTab } from '@codemirror/commands';
+import {
+  defaultKeymap,
+  history,
+  indentWithTab,
+  undo as cmUndo
+} from '@codemirror/commands';
 
 import { keymap } from '@codemirror/view';
 
@@ -134,7 +139,12 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
             from: 0,
             to: this._cmView.state.doc.length,
             insert: content
-          }
+          },
+          annotations: (
+            Transaction as typeof Transaction & {
+              addToHistory: { of: (v: boolean) => unknown };
+            }
+          ).addToHistory.of(false)
         };
 
     this._cmView.dispatch(transaction);
@@ -146,6 +156,13 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
    */
   focus(): void {
     this._editorHost.node.focus();
+  }
+
+  /**
+   * Undo the last history step.
+   */
+  undo(): void {
+    cmUndo({ state: this._cmView.state, dispatch: this._cmView.dispatch });
   }
 
   // ── Signals ──────────────────────────────────────────────────────────
