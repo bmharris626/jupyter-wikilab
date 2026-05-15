@@ -7,6 +7,8 @@ import { Panel, PanelLayout } from '@lumino/widgets';
 
 import { MainAreaWidget } from '@jupyterlab/apputils';
 
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
+
 import { listWikis } from './wikiApi';
 
 import { WikiBrowser } from './components/WikiBrowser';
@@ -21,6 +23,19 @@ import { registerCommands } from './commands';
 // Module-level reference so editorPlugin can access the editor
 // created in the main plugin (both share this module scope).
 let _editorInstance: WikiEditor | null = null;
+
+// ── Settings cache ──────────────────────────────────────────────────────────
+
+/** Cached wikilab settings, populated on startup. */
+let _settings: ISettingRegistry.ISettings | null = null;
+
+/**
+ * Returns the cached settings object.
+ * Only available after the settings plugin has activated.
+ */
+export function getSettings(): ISettingRegistry.ISettings | null {
+  return _settings;
+}
 
 // ── Plugin 1: Core activation + IWikiBrowser token ──────────────────────────
 
@@ -193,18 +208,39 @@ const editorPlugin: JupyterFrontEndPlugin<IWikiEditor> = {
 // ── Plugin 3: Settings integration ──────────────────────────────────────────
 
 /**
- * Third plugin that provides the settings schema fields
- * and registers them with the application.
+ * Third plugin that loads wikilab settings from the schema
+ * and caches them for consumption by other components.
  */
 const settingsPlugin: JupyterFrontEndPlugin<void> = {
   id: 'jupyterhub-wikilab:settings-plugin',
-  description: 'Registers wikilab settings schema fields.',
+  description: 'Loads and caches wikilab extension settings.',
   autoStart: true,
-  activate: (app: JupyterFrontEnd) => {
-    // Settings are loaded automatically from schema/plugin.json
-    // via the jupyterlab settings system. No explicit registration
-    // needed — the schema file is the single source of truth.
-    console.log('JupyterLab extension settings loaded.');
+  requires: [ISettingRegistry],
+  activate: (app: JupyterFrontEnd, registry: ISettingRegistry) => {
+    registry
+      .load('jupyterhub-wikilab:plugin')
+      .then(settings => {
+        _settings = settings;
+        console.log('[wikilab] settings loaded:', settings.composite);
+      })
+      .catch(err => {
+        console.error('[wikilab] failed to load settings:', err);
+      });
+
+    // Re-load whenever any plugin's settings change
+    registry.pluginChanged.connect((_, pluginId) => {
+      if (pluginId === 'jupyterhub-wikilab:plugin') {
+        registry
+          .reload('jupyterhub-wikilab:plugin')
+          .then(s => {
+            _settings = s;
+            console.log('[wikilab] settings reloaded:', s.composite);
+          })
+          .catch(err => {
+            console.error('[wikilab] failed to reload settings:', err);
+          });
+      }
+    });
   }
 };
 
