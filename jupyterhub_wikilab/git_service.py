@@ -228,6 +228,30 @@ def get_file_history(wiki_path: str, file_path: str) -> List[Dict]:
         return []
 
 
+def get_page_content_at_sha(wiki_path: str, file_path: str, sha: str) -> Optional[str]:
+    """
+    Return the content of a file at a specific git commit SHA.
+
+    Args:
+        wiki_path: Path to the wiki directory
+        file_path: Path to the file within the wiki (e.g. 'home.md')
+        sha: Git commit SHA (full or abbreviated)
+
+    Returns:
+        File content string, or None if the file does not exist at that SHA
+    """
+    try:
+        repo = Repo(wiki_path)
+        # Resolve the commit
+        commit = repo.commit(sha)
+        # Get the blob content from the tree at that commit
+        tree = commit.tree
+        blob = tree[file_path]
+        return blob.data_stream.read().decode("utf-8")
+    except Exception:
+        return None
+
+
 def get_page_sha(wiki_id: str, slug: str) -> str:
     """
     Get the latest commit SHA for a wiki page.

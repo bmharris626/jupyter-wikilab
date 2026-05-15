@@ -20,6 +20,7 @@ import type {
   PageCreateResponse,
   PageRenameRequest,
   HistoryResponse,
+  PageAtShaResponse,
   GitStatusResponse,
   SearchResponse,
   BacklinksResponse
@@ -283,6 +284,24 @@ export async function getPageHistory(
 ): Promise<HistoryResponse> {
   return requestAPI<HistoryResponse>(
     wikiUrl(wikiId, 'pages', encodeURIComponent(slug), 'history'),
+    serverSettings,
+    { method: 'GET' }
+  );
+}
+
+/**
+ * Get page content at a specific git commit SHA.
+ *
+ * `GET /wikis/{wiki_id}/pages/{slug}/history/{sha}`
+ */
+export async function getPageContentAtSha(
+  wikiId: string,
+  slug: string,
+  sha: string,
+  serverSettings: ServerConnection.ISettings
+): Promise<PageAtShaResponse> {
+  return requestAPI<PageAtShaResponse>(
+    wikiUrl(wikiId, 'pages', encodeURIComponent(slug), 'history', sha),
     serverSettings,
     { method: 'GET' }
   );

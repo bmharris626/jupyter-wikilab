@@ -9,10 +9,10 @@ Implement advanced read/reconcile workflows for a git-backed wiki.
   - **Validation:** `jlpm test -- PageHistory` — 14/14 passed
   - **Commit suggestion:** `feat(ui): add page history commit list`
 
-- [ ] **Implement historical content view**
+- [x] **Implement historical content view**
   - **Task:** Load and display page content at selected commit SHA.
-  - **Validation:** `jlpm test -- PageHistory-commit-content`
-  - **Commit suggestion:** `feat(ui): support viewing page content at commit`
+  - **Validation:** `jlpm test -- PageHistory` — 19/19 passed (5 new content panel tests)
+  - **Commit suggestion:** `feat(ui): add historical content view with backend route`
 
 - [ ] **Implement `ConflictView.tsx` layout**
   - **Task:** Render base/yours/theirs panes for 409 payload.

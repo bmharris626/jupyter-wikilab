@@ -106,6 +106,11 @@ export interface HistoryResponse {
   history: CommitEntry[];
 }
 
+/** GET /wikis/{id}/pages/{slug}/history/{sha} response body. */
+export interface PageAtShaResponse {
+  content: string;
+}
+
 /** GET /wikis/{id}/git/status response body. */
 export interface GitStatusResponse {
   branch: string;
@@ -152,6 +157,7 @@ export type ApiResponseMap = {
   'DELETE:/wikis/:id/pages/:slug': OperationResponse;
   'POST:/wikis/:id/pages/:slug/rename': OperationResponse;
   'GET:/wikis/:id/pages/:slug/history': HistoryResponse;
+  'GET:/wikis/:id/pages/:slug/history/:sha': PageAtShaResponse;
   'GET:/wikis/:id/git/status': GitStatusResponse;
   'POST:/wikis/:id/git/pull': OperationResponse;
   'POST:/wikis/:id/git/push': OperationResponse;

@@ -24,7 +24,7 @@ import { ServerConnection } from '@jupyterlab/services';
 
 import { Signal } from '@lumino/signaling';
 
-import { getPageHistory } from '../wikiApi';
+import { getPageHistory, getPageContentAtSha } from '../wikiApi';
 import type { CommitEntry } from '../types';
 
 // ── CSS class namespace ─────────────────────────────────────────────────────
@@ -41,6 +41,8 @@ export interface IHistoryPanel {
   readonly loading: boolean;
   /** The list of commit entries loaded for the active page. */
   readonly commits: CommitEntry[];
+  /** The currently loaded historical content, or null. */
+  readonly content: string | null;
 }
 
 /** Arguments carried by the commit-selected event. */
@@ -77,9 +79,11 @@ export class PageHistory extends Panel implements IHistoryPanel {
 
     this._createHeader();
     this._createTable();
+    this._createContentPanel();
 
     layout.addWidget(this._header);
     layout.addWidget(this._table);
+    layout.addWidget(this._contentPanel);
   }
 
   // ── IHistoryPanel ──────────────────────────────────────────────────────
@@ -90,6 +94,10 @@ export class PageHistory extends Panel implements IHistoryPanel {
 
   get commits(): CommitEntry[] {
     return this._commits;
+  }
+
+  get content(): string | null {
+    return this._content;
   }
 
   // ── Public API ─────────────────────────────────────────────────────────
@@ -123,6 +131,41 @@ export class PageHistory extends Panel implements IHistoryPanel {
     this._renderTable();
   }
 
+  /**
+   * Fetch and display the page content at a specific commit SHA.
+   *
+   * @param wikiId - The wiki ID
+   * @param slug - The page slug
+   * @param sha - The git commit SHA to load content from
+   */
+  async loadContentAtSha(
+    wikiId: string,
+    slug: string,
+    sha: string
+  ): Promise<void> {
+    if (!sha || !wikiId || !slug || !this._serverSettings) {
+      this._content = null;
+      this._renderContent();
+      return;
+    }
+
+    this._content = '(loading…)';
+
+    try {
+      const response = await getPageContentAtSha(
+        wikiId,
+        slug,
+        sha,
+        this._serverSettings
+      );
+      this._content = response.content;
+    } catch (err) {
+      this._content = `Failed to load content: ${err instanceof Error ? err.message : String(err)}`;
+    }
+
+    this._renderContent();
+  }
+
   // ── Signals ────────────────────────────────────────────────────────────
 
   /**
@@ -152,6 +195,7 @@ export class PageHistory extends Panel implements IHistoryPanel {
   private _serverSettings: ServerConnection.ISettings | null = null;
   private _loading = false;
   private _commits: CommitEntry[] = [];
+  private _content: string | null = null;
   // ── DOM construction ───────────────────────────────────────────────────
 
   private _header!: Panel;
@@ -159,6 +203,8 @@ export class PageHistory extends Panel implements IHistoryPanel {
   private _headerCount!: HTMLSpanElement;
   private _table!: Panel;
   private _tableContainer!: HTMLDivElement;
+  private _contentPanel!: Panel;
+  private _contentContainer!: HTMLPreElement;
 
   private _onCellClick = (event: MouseEvent): void => {
     const row = (event.target as HTMLElement).closest(`.${CSS_PREFIX}-row`);
@@ -230,6 +276,19 @@ export class PageHistory extends Panel implements IHistoryPanel {
     this._tableContainer.appendChild(headerRow);
     this._tableContainer.addEventListener('click', this._onCellClick);
     this._table.node.appendChild(this._tableContainer);
+  }
+
+  private _createContentPanel(): void {
+    this._contentPanel = new Panel();
+    this._contentPanel.addClass(`${CSS_PREFIX}-content`);
+
+    this._contentContainer = document.createElement('pre');
+    this._contentContainer.className = `${CSS_PREFIX}-contentBody`;
+    this._contentContainer.style.cssText =
+      'margin:0;padding:12px;overflow:auto;background:#f8f9fa;font-size:13px;white-space:pre-wrap;font-family:var(--jp-mono-font-family);';
+    this._contentContainer.textContent = '';
+
+    this._contentPanel.node.appendChild(this._contentContainer);
   }
 
   // ── Rendering ──────────────────────────────────────────────────────────
@@ -317,5 +376,13 @@ export class PageHistory extends Panel implements IHistoryPanel {
 
       this._tableContainer.appendChild(row);
     }
+  }
+
+  private _renderContent(): void {
+    if (this._content === null || this._content === '') {
+      this._contentContainer.textContent = '';
+      return;
+    }
+    this._contentContainer.textContent = this._content;
   }
 }

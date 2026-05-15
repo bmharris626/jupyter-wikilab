@@ -11,10 +11,11 @@ import type { CommitEntry } from '../types';
 // ── Mock the API layer ──────────────────────────────────────────────────────
 
 jest.mock('../wikiApi', () => ({
-  getPageHistory: jest.fn()
+  getPageHistory: jest.fn(),
+  getPageContentAtSha: jest.fn()
 }));
 
-import { getPageHistory } from '../wikiApi';
+import { getPageHistory, getPageContentAtSha } from '../wikiApi';
 
 // Minimal server settings object for API calls.
 const mockServerSettings: any = {
@@ -42,8 +43,8 @@ describe('PageHistory', () => {
     expect(historyPanel.hasClass('jp-PageHistory')).toBe(true);
   });
 
-  it('should have a header and table as children', () => {
-    expect(historyPanel.widgets.length).toBe(2);
+  it('should have a header, table, and content panel as children', () => {
+    expect(historyPanel.widgets.length).toBe(3);
   });
 
   it('should start with an empty commit list', () => {
@@ -290,5 +291,60 @@ describe('PageHistory', () => {
     expect(dateCells).toHaveLength(2);
     // The commit date should contain formatted content (not the raw ISO string)
     expect(dateCells[1].textContent).not.toBe('2024-03-15T10:30:00Z');
+  });
+
+  // ── Content panel ──────────────────────────────────────────────────────
+
+  it('should start with null content', () => {
+    expect(historyPanel.content).toBeNull();
+  });
+
+  it('should show loading text when fetching content at SHA', async () => {
+    let resolvePromise: () => void;
+    const pendingPromise = new Promise(resolve => {
+      resolvePromise = () => resolve({ content: 'Hello world' } as any);
+    });
+
+    (getPageContentAtSha as jest.Mock).mockImplementation(() => pendingPromise);
+
+    historyPanel.loadContentAtSha('test-wiki', 'home', 'abc1234');
+
+    expect(historyPanel.content).toBe('(loading…)');
+
+    resolvePromise!();
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(historyPanel.content).toBe('Hello world');
+  });
+
+  it('should show empty content when no wiki ID is provided', async () => {
+    await historyPanel.loadContentAtSha('', 'home', 'abc1234');
+    expect(historyPanel.content).toBeNull();
+  });
+
+  it('should show error text when content fetch fails', async () => {
+    (getPageContentAtSha as jest.Mock).mockRejectedValueOnce(
+      new Error('Network error')
+    );
+
+    await historyPanel.loadContentAtSha('test-wiki', 'home', 'abc1234');
+
+    expect(historyPanel.content).toContain('Failed to load content');
+    expect(historyPanel.content).toContain('Network error');
+  });
+
+  it('should render content in the content panel', async () => {
+    (getPageContentAtSha as jest.Mock).mockResolvedValueOnce({
+      content: 'Hello, world!\n\nThis is historical content.'
+    });
+
+    await historyPanel.loadContentAtSha('test-wiki', 'home', 'abc1234');
+
+    const contentBody = historyPanel.node.querySelector(
+      '.jp-PageHistory-contentBody'
+    );
+    expect(contentBody?.textContent).toBe(
+      'Hello, world!\n\nThis is historical content.'
+    );
   });
 });

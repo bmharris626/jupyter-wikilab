@@ -38,6 +38,7 @@ from jupyterhub_wikilab.git_service import (
     git_pull_wiki,
     git_push_wiki,
     get_file_history,
+    get_page_content_at_sha,
     search_grep_results,
     backlinks_grep_results,
 )
@@ -296,6 +297,30 @@ class WikiPageHistoryHandler(APIHandler):
         self.finish(json.dumps({"history": history}))
 
 
+class WikiPageHistoryShaHandler(APIHandler):
+    """Handler for retrieving page content at a specific git commit SHA."""
+
+    @tornado.web.authenticated
+    def get(self, wiki_id, slug, sha):
+        """Get page content as it existed at the given commit SHA."""
+        wiki_path = None
+        wikis = list_wikis()
+        if wiki_id in wikis:
+            wiki_path = wikis[wiki_id].get("path")
+
+        if wiki_path is None:
+            self.set_status(404)
+            self.finish(json.dumps({"error": "Wiki not found"}))
+            return
+
+        content = get_page_content_at_sha(str(wiki_path), f"{slug}.md", sha)
+        if content is not None:
+            self.finish(json.dumps({"content": content}))
+        else:
+            self.set_status(404)
+            self.finish(json.dumps({"error": "File not found at this commit"}))
+
+
 class WikiPageBacklinksHandler(APIHandler):
     """Handler for finding backlinks to a page."""
 
@@ -381,6 +406,10 @@ def setup_route_handlers(web_app):
             (
                 url_path_join(wiki_pages_route_pattern, "search$"),
                 WikiPageSearchHandler,
+            ),
+            (
+                url_path_join(wiki_pages_route_pattern, r"([^/]+)/history/([^/]+)$"),
+                WikiPageHistoryShaHandler,
             ),
             (
                 url_path_join(wiki_pages_route_pattern, r"([^/]+)/history$"),
