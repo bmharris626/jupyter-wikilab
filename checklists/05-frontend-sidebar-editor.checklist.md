@@ -24,9 +24,9 @@ Deliver primary browsing/editing experience with save and dirty-state behavior.
   - **Validation:** `jlpm test -- WikiEditor` — 15/15 passed, 98.61% coverage
   - **Commit suggestion:** `feat(ui): add split wiki editor and preview layout`
 
-- [ ] **Wire page load into editor state**
+- [x] **Wire page load into editor state**
   - **Task:** Load selected page content and associated `head_sha`.
-  - **Validation:** `jlpm test -- WikiEditor-load-page`
+  - **Validation:** `jlpm test` — 58/58 passed; `jlpm build` success
   - **Commit suggestion:** `feat(ui): connect page loading to editor state`
 
 - [ ] **Implement save action (button + Ctrl+S)**

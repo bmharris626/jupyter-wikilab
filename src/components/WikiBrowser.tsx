@@ -22,7 +22,9 @@ import { Panel, PanelLayout } from '@lumino/widgets';
 
 import { ServerConnection } from '@jupyterlab/services';
 
-import { listPages, getGitStatus, gitPull, gitPush } from '../wikiApi';
+import { Signal } from '@lumino/signaling';
+
+import { getPage, listPages, getGitStatus, gitPull, gitPush } from '../wikiApi';
 import type { WikiInfo, PageEntry, GitStatusResponse } from '../types';
 
 // ── CSS class namespace ─────────────────────────────────────────────────────
@@ -46,6 +48,14 @@ export interface WikiSelectedArgs {
   name: 'wikiSelected';
   newValue: string;
   oldValue: string;
+}
+
+/** Arguments carried by the page-selected event. */
+export interface PageSelectedArgs {
+  /** The slug of the selected page. */
+  slug: string;
+  /** The title of the selected page (may be empty). */
+  title: string;
 }
 
 // ── WikiBrowser widget ──────────────────────────────────────────────────────
@@ -127,6 +137,23 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     }
   }
 
+  /**
+   * Fetch page content by slug and emit a page-selected signal.
+   *
+   * The returned promise resolves with the content string on success
+   * or rejects with an error message on failure.
+   */
+  async loadPage(slug: string): Promise<string> {
+    const wikiId = this.activeWikiId;
+
+    if (!wikiId || !this._serverSettings) {
+      throw new Error('No wiki selected or server settings not initialized.');
+    }
+
+    const response = await getPage(wikiId, slug, this._serverSettings);
+    return response.content;
+  }
+
   // ── Signals ────────────────────────────────────────────────────────────
 
   /**
@@ -138,6 +165,13 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     oldValue: ''
   };
 
+  /**
+   * Emit a page-selected signal with the given values.
+   */
+  _emitPageSelected(slug: string, title: string): void {
+    this.pageSelected.emit({ slug, title });
+  }
+
   /** Emit a wiki-selected signal with the given values. */
   _emitWikiSelected(newValue: string): void {
     this.wikiSelected.oldValue = this.wikiSelected.newValue;
@@ -147,12 +181,9 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   // ── Widget lifecycle ───────────────────────────────────────────────────
 
   /**
-   * Dispose of the widget and release resources.
+   * Signal fired when the user clicks a page in the page list.
    */
-  dispose(): void {
-    this._wikiSelect.removeEventListener('change', this._onWikiChange);
-    super.dispose();
-  }
+  pageSelected = new Signal<this, PageSelectedArgs>(this);
 
   // ── Private helpers ────────────────────────────────────────────────────
 
@@ -163,6 +194,8 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
 
   private _serverSettings: ServerConnection.ISettings | null = null;
   private _pages: PageEntry[] = [];
+  /** Most recently loaded page content (set by loadPage). */
+  _lastLoadedContent: string = '';
 
   // ── DOM construction ───────────────────────────────────────────────────
 
@@ -311,6 +344,17 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       link.textContent = page.title || page.slug;
       link.setAttribute('data-slug', page.slug);
       link.setAttribute('title', `Open ${page.title || page.slug}`);
+
+      link.addEventListener('click', async (event: MouseEvent) => {
+        event.preventDefault();
+        try {
+          this._lastLoadedContent = await this.loadPage(page.slug);
+          this._emitPageSelected(page.slug, page.title);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          this._showPlaceholder(`Failed to load "${page.slug}": ${message}`);
+        }
+      });
 
       li.appendChild(link);
       this._pageList.appendChild(li);

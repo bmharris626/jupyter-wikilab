@@ -3,27 +3,73 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
-import { requestAPI } from './request';
+import { Panel, PanelLayout } from '@lumino/widgets';
+
+import { listWikis } from './wikiApi';
+
+import { WikiBrowser } from './components/WikiBrowser';
+import { WikiEditor } from './components/WikiEditor';
+
+// ── Plugin ──────────────────────────────────────────────────────────────────
 
 /**
  * Initialization data for the jupyterhub-wikilab extension.
  */
 const plugin: JupyterFrontEndPlugin<void> = {
   id: 'jupyterhub-wikilab:plugin',
-  description: 'An extension for displaying/editing wikis within jupyterhub workspace',
+  description:
+    'An extension for displaying and editing wikis within JupyterLab.',
   autoStart: true,
-  activate: (app: JupyterFrontEnd) => {
-    console.log('JupyterLab extension jupyterhub-wikilab is activated!');
+  activate: async (app: JupyterFrontEnd) => {
+    const serverSettings = app.serviceManager.serverSettings;
 
-    requestAPI<any>('hello', app.serviceManager.serverSettings)
-      .then(data => {
-        console.log(data);
-      })
-      .catch(reason => {
-        console.error(
-          `The jupyterhub_wikilab server extension appears to be missing.\n${reason}`
-        );
-      });
+    // ── Sidebar container ──────────────────────────────────────────────────
+
+    const sidebar = new Panel();
+    sidebar.id = 'wikilab-sidebar';
+    sidebar.title.caption = 'WikiLab';
+    sidebar.title.iconClass = 'lm-CommandPalette-icon';
+
+    const layout = sidebar.layout as PanelLayout;
+
+    // ── WikiBrowser (left) ─────────────────────────────────────────────────
+
+    const browser = new WikiBrowser();
+    browser.serverSettings = serverSettings;
+
+    // ── WikiEditor (right) ─────────────────────────────────────────────────
+
+    const editor = new WikiEditor();
+
+    // ── Wire page click → load content into editor ─────────────────────────
+
+    browser.pageSelected.connect((_, args) => {
+      editor.page = {
+        slug: args.slug,
+        title: '',
+        mtime: new Date().toISOString()
+      };
+      editor.setContent(browser._lastLoadedContent, false);
+      editor.focus();
+    });
+
+    layout.addWidget(browser);
+    layout.addWidget(editor);
+
+    // ── Populate wikis ─────────────────────────────────────────────────────
+
+    try {
+      const response = await listWikis(serverSettings);
+      browser.populateWikis(response.wikis);
+    } catch {
+      browser.populateWikis({});
+    }
+
+    // ── Register sidebar as a JupyterLab panel ─────────────────────────────
+
+    app.shell.add(sidebar, 'left', { rank: 100 });
+
+    console.log('JupyterLab extension jupyterhub-wikilab is activated!');
   }
 };
 
