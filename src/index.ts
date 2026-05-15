@@ -5,6 +5,8 @@ import {
 
 import { Panel, PanelLayout } from '@lumino/widgets';
 
+import { MainAreaWidget } from '@jupyterlab/apputils';
+
 import { listWikis } from './wikiApi';
 
 import { WikiBrowser } from './components/WikiBrowser';
@@ -26,8 +28,8 @@ let _editorInstance: WikiEditor | null = null;
  * Initialization data for the jupyterhub-wikilab extension.
  *
  * Instantiates the sidebar and editor, registers the sidebar
- * in JupyterLab's left area, and provides the WikiBrowser token
- * for dependency injection.
+ * in JupyterLab's left area, and the editor in the main area.
+ * Provides the WikiBrowser token for dependency injection.
  */
 const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
   id: 'jupyterhub-wikilab:plugin',
@@ -42,25 +44,32 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
 
     registerCommands(app);
 
-    // ── Sidebar container ──────────────────────────────────────────────────
+    // ── Sidebar container (left area) ──────────────────────────────────────
 
     const sidebar = new Panel();
     sidebar.id = 'wikilab-sidebar';
     sidebar.title.caption = 'WikiLab';
     sidebar.title.iconClass = 'lm-CommandPalette-icon';
 
-    const layout = sidebar.layout as PanelLayout;
+    const sidebarLayout = sidebar.layout as PanelLayout;
 
-    // ── WikiBrowser (left) ─────────────────────────────────────────────────
+    // ── WikiBrowser (left sidebar) ─────────────────────────────────────────
 
     const browser = new WikiBrowser();
     browser.serverSettings = serverSettings;
 
-    // ── WikiEditor (right) ─────────────────────────────────────────────────
+    // ── WikiEditor (main area) ─────────────────────────────────────────────
 
     const editor = new WikiEditor();
     editor.serverSettings = serverSettings;
     _editorInstance = editor;
+
+    // ── Main-area widget wrapping the editor ───────────────────────────────
+
+    const editorWidget = new MainAreaWidget({ content: editor });
+    editorWidget.id = 'wikilab-editor';
+    editorWidget.title.caption = 'WikiLab Editor';
+    editorWidget.title.iconClass = 'lm-FileIcon';
 
     // ── Unsaved-changes guard ─────────────────────────────────────────────
 
@@ -112,7 +121,8 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
         }
       });
 
-      layout.insertWidget(1, conflictView);
+      // Place conflict view above the editor in the main area
+      app.shell.add(conflictView, 'main', { rank: 99 });
     });
 
     // ── Wire page click → load content into editor ─────────────────────────
@@ -123,10 +133,11 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
         head_sha: args.head_sha,
         content: browser._lastLoadedContent
       });
+      // Focus the editor in the main area
+      app.shell.activateById('wikilab-editor');
     });
 
-    layout.addWidget(browser);
-    layout.addWidget(editor);
+    sidebarLayout.addWidget(browser);
 
     // ── Populate wikis ─────────────────────────────────────────────────────
 
@@ -137,9 +148,13 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
       browser.populateWikis({});
     }
 
-    // ── Register sidebar as a JupyterLab panel ─────────────────────────────
+    // ── Register sidebar in left area ──────────────────────────────────────
 
     app.shell.add(sidebar, 'left', { rank: 100 });
+
+    // ── Register editor in main area ───────────────────────────────────────
+
+    app.shell.add(editorWidget, 'main', { rank: 100 });
 
     // ── Return the WikiBrowser service ─────────────────────────────────────
 
