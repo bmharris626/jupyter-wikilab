@@ -67,3 +67,59 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* ── Editor preview toolbar ─────────────────────────────────────────────── */
+
+.jp-WikiEditor-previewToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--md-border-color);
+  background: var(--jp-layout-color1);
+}
+
+.jp-WikiEditor-pageTitle {
+  font-size: var(--jp-ui-font-size1);
+  font-weight: 600;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jp-WikiEditor-saveBtn {
+  flex: 0 0 auto;
+  padding: 2px 10px;
+  font-size: var(--jp-ui-font-size0);
+  border: 1px solid var(--md-border-color);
+  border-radius: 3px;
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color0);
+  cursor: pointer;
+}
+
+.jp-WikiEditor-saveBtn:hover:not(:disabled) {
+  background: var(--jp-layout-color2);
+}
+
+.jp-WikiEditor-saveBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.jp-WikiEditor-saveStatus {
+  font-size: var(--jp-ui-font-size0);
+  font-family: var(--jp-mono-font-family);
+  flex: 0 0 auto;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jp-WikiEditor-previewContent {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 12px 16px;
+}

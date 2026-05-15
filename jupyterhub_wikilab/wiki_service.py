@@ -188,6 +188,38 @@ def get_page_content(wiki_id: str, slug: str) -> Optional[str]:
         return None
 
 
+def get_page_with_sha(wiki_id: str, slug: str) -> Optional[dict]:
+    """
+    Get page content and its current git commit SHA.
+
+    Args:
+        wiki_id: The wiki ID
+        slug: Page slug
+
+    Returns:
+        Dict with 'content' and 'sha' keys, or None if page not found.
+    """
+    from .git_service import get_page_sha
+
+    wiki_path = get_wiki_path(wiki_id)
+    if not wiki_path:
+        return None
+
+    page_path = get_page_path(wiki_path, slug)
+    if not page_path.exists():
+        return None
+
+    try:
+        with open(page_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return None
+
+    sha = get_page_sha(wiki_id, slug)
+
+    return {"content": content, "sha": sha}
+
+
 def save_page(
     wiki_id: str, slug: str, content: str, head_sha: Optional[str] = None
 ) -> bool:

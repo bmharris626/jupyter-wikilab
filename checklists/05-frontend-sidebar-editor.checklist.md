@@ -29,10 +29,10 @@ Deliver primary browsing/editing experience with save and dirty-state behavior.
   - **Validation:** `jlpm test` — 58/58 passed; `jlpm build` success
   - **Commit suggestion:** `feat(ui): connect page loading to editor state`
 
-- [ ] **Implement save action (button + Ctrl+S)**
+- [x] **Implement save action (button + Ctrl+S)**
   - **Task:** Save current content via API PUT with `head_sha`.
-  - **Validation:** `jlpm test -- WikiEditor-save`
-  - **Commit suggestion:** `feat(ui): implement editor save action and shortcut`
+  - **Validation:** `jlpm test` — 64/64 passed (6 original + 6 new save tests), 92.43% coverage on WikiEditor.tsx
+  - **Commit suggestion:** `feat(ui): implement editor save action, Ctrl+S, and dirty-state tracking`
 
 - [ ] **Add dirty-state and unload/close warnings**
   - **Task:** Track unsaved edits and warn before leaving.

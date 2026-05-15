@@ -44,6 +44,7 @@ export interface PageEntry {
   slug: string;
   title: string;
   mtime: string;
+  head_sha?: string;
 }
 
 /** GET /wikis/{id}/pages response body. */
@@ -54,6 +55,7 @@ export interface PageListResponse {
 /** GET /wikis/{id}/pages/{slug} response body. */
 export interface PageGetResponse {
   content: string;
+  head_sha?: string;
 }
 
 /** PUT /wikis/{id}/pages/{slug} request body. */

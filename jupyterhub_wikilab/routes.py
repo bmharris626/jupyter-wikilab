@@ -14,6 +14,7 @@ from jupyterhub_wikilab.wiki_service import (
     remove_wiki,
     list_pages,
     get_page_content,
+    get_page_with_sha,
     save_page,
     create_page,
     delete_page,
@@ -128,10 +129,12 @@ class WikiPageContentHandler(APIHandler):
 
     @tornado.web.authenticated
     def get(self, wiki_id, slug):
-        """Get a page's content."""
-        content = get_page_content(wiki_id, slug)
-        if content is not None:
-            self.finish(json.dumps({"content": content}))
+        """Get a page's content and current git SHA."""
+        result = get_page_with_sha(wiki_id, slug)
+        if result is not None:
+            self.finish(
+                json.dumps({"content": result["content"], "head_sha": result["sha"]})
+            )
         else:
             self.set_status(404)
             self.finish(json.dumps({"error": "Page not found"}))

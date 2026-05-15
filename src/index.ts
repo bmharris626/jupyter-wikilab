@@ -40,6 +40,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     // ── WikiEditor (right) ─────────────────────────────────────────────────
 
     const editor = new WikiEditor();
+    editor.serverSettings = serverSettings;
 
     // ── Wire page click → load content into editor ─────────────────────────
 
@@ -49,6 +50,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
         title: '',
         mtime: new Date().toISOString()
       };
+      editor.setPage(browser.activeWikiId, args.slug, args.head_sha);
       editor.setContent(browser._lastLoadedContent, false);
       editor.focus();
     });

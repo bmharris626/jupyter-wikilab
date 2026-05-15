@@ -56,6 +56,8 @@ export interface PageSelectedArgs {
   slug: string;
   /** The title of the selected page (may be empty). */
   title: string;
+  /** The current git commit SHA for optimistic locking. */
+  head_sha?: string;
 }
 
 // ── WikiBrowser widget ──────────────────────────────────────────────────────
@@ -138,7 +140,10 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   }
 
   /**
-   * Fetch page content by slug and emit a page-selected signal.
+   * Fetch page content by slug.
+   *
+   * Stores both content and `head_sha` internally so they are available
+   * to the signal handler in the parent component.
    *
    * The returned promise resolves with the content string on success
    * or rejects with an error message on failure.
@@ -151,6 +156,8 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     }
 
     const response = await getPage(wikiId, slug, this._serverSettings);
+    this._lastLoadedContent = response.content;
+    this._lastLoadedSha = response.head_sha;
     return response.content;
   }
 
@@ -169,7 +176,11 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
    * Emit a page-selected signal with the given values.
    */
   _emitPageSelected(slug: string, title: string): void {
-    this.pageSelected.emit({ slug, title });
+    this.pageSelected.emit({
+      slug,
+      title,
+      head_sha: this._lastLoadedSha
+    });
   }
 
   /** Emit a wiki-selected signal with the given values. */
@@ -196,6 +207,8 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   private _pages: PageEntry[] = [];
   /** Most recently loaded page content (set by loadPage). */
   _lastLoadedContent: string = '';
+  /** Most recently loaded page git SHA (set by loadPage). */
+  _lastLoadedSha: string | undefined = undefined;
 
   // ── DOM construction ───────────────────────────────────────────────────
 

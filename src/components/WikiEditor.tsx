@@ -21,7 +21,11 @@
 
 import { Transaction } from '@codemirror/state';
 
-import { EditorView, ViewUpdate } from '@codemirror/view';
+import {
+  EditorView,
+  type ViewUpdate,
+  keymap as cmKeymap
+} from '@codemirror/view';
 
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 
@@ -32,19 +36,20 @@ import {
   undo as cmUndo
 } from '@codemirror/commands';
 
-import { keymap } from '@codemirror/view';
-
 import { bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 
 import { searchKeymap } from '@codemirror/search';
 
 import { Panel, SplitPanel } from '@lumino/widgets';
 
+import { ServerConnection } from '@jupyterlab/services';
+
 import { jupyterTheme } from '@jupyterlab/codemirror';
 
 import { Signal } from '@lumino/signaling';
 
 import { render } from '../markdownRenderer';
+import { savePage } from '../wikiApi';
 import type { PageEntry } from '../types';
 
 // ── CSS class namespace ─────────────────────────────────────────────────────
@@ -59,6 +64,8 @@ export interface IEditorPanel {
   readonly page: PageEntry | null;
   /** Current editor content. */
   readonly content: string;
+  /** Whether the editor has unsaved changes. */
+  readonly isDirty: boolean;
 }
 
 /** Arguments for the content-changed event. */
@@ -117,6 +124,10 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
     return this._cmView.state.doc.toString();
   }
 
+  get isDirty(): boolean {
+    return this._isDirty;
+  }
+
   // ── Public API ───────────────────────────────────────────────────────
 
   /**
@@ -165,6 +176,77 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
     cmUndo({ state: this._cmView.state, dispatch: this._cmView.dispatch });
   }
 
+  /**
+   * Set the wiki ID and slug for the page being edited.
+   *
+   * Call this when a new page is selected so that {@link _handleSave}
+   * knows where to POST the content.
+   */
+  setPage(wikiId: string, slug: string, headSha?: string): void {
+    this._wikiId = wikiId;
+    this._slug = slug;
+    this._currentSha = headSha;
+    this._isDirty = false;
+    this._updateSaveButton();
+  }
+
+  /**
+   * Mark the editor as having unsaved changes.
+   *
+   * Call this whenever the user edits the document.
+   */
+  markDirty(): void {
+    this._isDirty = true;
+    this._updateSaveButton();
+  }
+
+  private _updateSaveButton(): void {
+    if (this._isDirty) {
+      this._saveBtn.textContent = 'Save *';
+    } else {
+      this._saveBtn.textContent = 'Save';
+    }
+    this._saveStatus.textContent = '';
+  }
+
+  private async _handleSave(): Promise<void> {
+    if (
+      !this._wikiId ||
+      !this._slug ||
+      !this._serverSettings ||
+      !this._isDirty
+    ) {
+      return;
+    }
+
+    this._saveBtn.textContent = 'Saving…';
+    this._saveBtn.disabled = true;
+
+    try {
+      await savePage(
+        this._wikiId,
+        this._slug,
+        {
+          content: this.content,
+          head_sha: this._currentSha
+        },
+        this._serverSettings
+      );
+      this._isDirty = false;
+      // The backend commit SHA is not returned, so we refresh the page to get it.
+      this._currentSha = undefined;
+      this._updateSaveButton();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this._saveStatus.textContent = `Save failed: ${message}`;
+      this._saveStatus.style.color = 'var(--jp-error-color1)';
+      this._updateSaveButton();
+    } finally {
+      this._saveBtn.textContent = this._isDirty ? 'Save *' : 'Save';
+      this._saveBtn.disabled = false;
+    }
+  }
+
   // ── Signals ──────────────────────────────────────────────────────────
 
   /**
@@ -191,12 +273,29 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
 
   private _page: PageEntry | null = null;
 
+  /** JupyterLab server settings — set by the plugin activator. */
+  set serverSettings(settings: ServerConnection.ISettings) {
+    this._serverSettings = settings;
+  }
+  private _serverSettings: ServerConnection.ISettings | null = null;
+
+  /** Wiki ID of the currently loaded page (for save). */
+  private _wikiId = '';
+  /** Slug of the currently loaded page (for save). */
+  private _slug = '';
+  /** Git HEAD SHA of the currently loaded page (optimistic locking). */
+  private _currentSha: string | undefined = undefined;
+  /** Whether the editor content has unsaved changes. */
+  private _isDirty = false;
+
   // DOM references
   private _editorHost!: Panel;
   private _cmView!: EditorView;
   private _previewPanel!: Panel;
   private _previewEl!: HTMLDivElement;
   private _pageLabel!: HTMLDivElement;
+  private _saveBtn!: HTMLButtonElement;
+  private _saveStatus!: HTMLDivElement;
 
   private _createEditor(): void {
     this._editorHost = new Panel();
@@ -208,16 +307,27 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
     const extensions = [
       // Core editing features
       history(),
-      keymap.of(defaultKeymap),
-      keymap.of([indentWithTab]),
+      cmKeymap.of(defaultKeymap),
+      cmKeymap.of([indentWithTab]),
       bracketMatching(),
       foldGutter(),
-      keymap.of(foldKeymap),
-      keymap.of(searchKeymap),
+      cmKeymap.of(foldKeymap),
+      cmKeymap.of(searchKeymap),
       // Markdown language support
       markdown({ base: markdownLanguage }),
       // JupyterLab theming
       jupyterTheme,
+      // Ctrl+S shortcut for saving
+      cmKeymap.of([
+        {
+          key: 'Ctrl-S',
+          mac: 'Cmd-S',
+          run: () => {
+            void this._handleSave();
+            return true;
+          }
+        }
+      ]),
       // Update listener for content change tracking
       EditorView.updateListener.of((update: ViewUpdate) => {
         if (update.docChanged) {
@@ -239,7 +349,7 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
     this._previewPanel = new Panel();
     this._previewPanel.addClass(`${CSS_PREFIX}-previewPanel`);
 
-    // Top bar: page title + tabs
+    // Top bar: page title + save button + status
     const toolbar = document.createElement('div');
     toolbar.className = `${CSS_PREFIX}-previewToolbar`;
 
@@ -247,6 +357,19 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
     this._pageLabel.className = `${CSS_PREFIX}-pageTitle`;
     this._pageLabel.textContent = 'Untitled';
     toolbar.appendChild(this._pageLabel);
+
+    // Save button
+    this._saveBtn = document.createElement('button');
+    this._saveBtn.className = `${CSS_PREFIX}-saveBtn`;
+    this._saveBtn.textContent = 'Save';
+    this._saveBtn.setAttribute('aria-label', 'Save page (Ctrl+S)');
+    this._saveBtn.addEventListener('click', () => void this._handleSave());
+    toolbar.appendChild(this._saveBtn);
+
+    // Save status indicator
+    this._saveStatus = document.createElement('div');
+    this._saveStatus.className = `${CSS_PREFIX}-saveStatus`;
+    toolbar.appendChild(this._saveStatus);
 
     // Preview container (scrollable)
     this._previewEl = document.createElement('div');
@@ -261,6 +384,7 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
   private _onContentChanged(): void {
     const newContent = this.content;
 
+    this.markDirty();
     this.contentChanged.emit({ content: newContent });
     this._updatePreview();
   }

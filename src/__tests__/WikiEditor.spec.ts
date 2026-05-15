@@ -18,12 +18,21 @@ jest.mock('../markdownRenderer', () => ({
   render: jest.fn((md: string) => `<div>${md}</div>`)
 }));
 
+// ── Mock savePage API ───────────────────────────────────────────────────────
+
+jest.mock('../wikiApi', () => ({
+  savePage: jest.fn()
+}));
+
 // ── Real imports ────────────────────────────────────────────────────────────
+
+import { ServerConnection } from '@jupyterlab/services';
 
 import { WikiEditor } from '../components/WikiEditor';
 import type { PageEntry } from '../types';
 
 import { render } from '../markdownRenderer';
+import { savePage } from '../wikiApi';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -193,5 +202,92 @@ describe('WikiEditor', () => {
     const editor = createFixture();
     editor.setContent('some content');
     expect(() => editor.dispose()).not.toThrow();
+  });
+
+  // ── SetPage ───────────────────────────────────────────────────────────
+
+  it('setPage stores wikiId, slug, and headSha', () => {
+    const editor = createFixture();
+    editor.setPage('my-wiki', 'my-page', 'abc123');
+    // Private fields are not directly accessible, but we can verify
+    // the save button starts as clean (no dirty marker).
+    const saveBtn = editor.node.querySelector(
+      '.jp-WikiEditor-saveBtn'
+    ) as HTMLButtonElement;
+    expect(saveBtn?.textContent).toBe('Save');
+  });
+
+  // ── markDirty ─────────────────────────────────────────────────────────
+
+  it('markDirty shows asterisk on save button', () => {
+    const editor = createFixture();
+    editor.setPage('my-wiki', 'my-page');
+    editor.markDirty();
+    const saveBtn = editor.node.querySelector(
+      '.jp-WikiEditor-saveBtn'
+    ) as HTMLButtonElement;
+    expect(saveBtn?.textContent).toBe('Save *');
+  });
+
+  it('setContent triggers markDirty via contentChanged', () => {
+    const editor = createFixture();
+    editor.setPage('my-wiki', 'my-page');
+    editor.setContent('initial', true); // addToHistory: true to avoid history annotation issues
+    const saveBtn = editor.node.querySelector(
+      '.jp-WikiEditor-saveBtn'
+    ) as HTMLButtonElement;
+    // setContent should trigger _onContentChanged → markDirty
+    expect(saveBtn?.textContent).toBe('Save *');
+  });
+
+  // ── Save button elements ──────────────────────────────────────────────
+
+  it('save button exists and is clickable', () => {
+    const editor = createFixture();
+    const saveBtn = editor.node.querySelector(
+      '.jp-WikiEditor-saveBtn'
+    ) as HTMLButtonElement;
+    expect(saveBtn).not.toBeNull();
+    expect(saveBtn?.textContent).toBe('Save');
+  });
+
+  it('save status element exists', () => {
+    const editor = createFixture();
+    const saveStatus = editor.node.querySelector(
+      '.jp-WikiEditor-saveStatus'
+    ) as HTMLDivElement;
+    expect(saveStatus).not.toBeNull();
+  });
+
+  it('successful _handleSave clears dirty state', async () => {
+    (savePage as jest.Mock).mockResolvedValueOnce({ message: 'saved' });
+    const mockServerSettings: ServerConnection.ISettings =
+      ServerConnection.makeSettings();
+    const editor = createFixture();
+    editor.serverSettings = mockServerSettings;
+    editor.setPage('wiki-a', 'test-page', 'sha1');
+    editor.setContent('new content', true);
+
+    // Now dirty
+    let saveBtn = editor.node.querySelector(
+      '.jp-WikiEditor-saveBtn'
+    ) as HTMLButtonElement;
+    expect(saveBtn?.textContent).toBe('Save *');
+
+    // Simulate save
+    await (editor as any)._handleSave();
+
+    expect(savePage).toHaveBeenCalledWith(
+      'wiki-a',
+      'test-page',
+      { content: 'new content', head_sha: 'sha1' },
+      mockServerSettings
+    );
+
+    // After save, button should be clean
+    saveBtn = editor.node.querySelector(
+      '.jp-WikiEditor-saveBtn'
+    ) as HTMLButtonElement;
+    expect(saveBtn?.textContent).toBe('Save');
   });
 });
