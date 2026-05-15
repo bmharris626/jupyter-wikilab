@@ -244,6 +244,28 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
+
+      // Detect 409 Conflict and emit signal for conflict resolution
+      if (
+        err instanceof ServerConnection.ResponseError &&
+        err.response.status === 409
+      ) {
+        const body = await err.response.json().catch(() => ({}));
+        this.conflictDetected.emit({
+          editorContent: this.content,
+          theirContent: (body as Record<string, unknown>).their_content as
+            | string
+            | undefined,
+          baseContent: (body as Record<string, unknown>).base_content as
+            | string
+            | undefined
+        });
+        this._saveStatus.textContent = 'Conflict — see below';
+        this._saveStatus.style.color = 'var(--jp-warning-color1)';
+        this._updateSaveButton();
+        return false;
+      }
+
       this._saveStatus.textContent = `Save failed: ${message}`;
       this._saveStatus.style.color = 'var(--jp-error-color1)';
       this._updateSaveButton();
@@ -265,6 +287,19 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
    * Signal emitted when the user clicks a wiki link in the preview.
    */
   wikiLinkClicked = new Signal<this, string>(this);
+
+  /**
+   * Signal emitted when a stale-write conflict (409) is detected.
+   * The parent should show a conflict resolution view.
+   */
+  conflictDetected = new Signal<
+    this,
+    {
+      editorContent: string;
+      theirContent: string | undefined;
+      baseContent: string | undefined;
+    }
+  >(this);
 
   // ── Widget lifecycle ─────────────────────────────────────────────────
 

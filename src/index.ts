@@ -9,6 +9,7 @@ import { listWikis } from './wikiApi';
 
 import { WikiBrowser } from './components/WikiBrowser';
 import { WikiEditor } from './components/WikiEditor';
+import { ConflictView } from './components/ConflictView';
 import { onDirtyChange, handlePageSwitch } from './utils/dirtyState';
 
 // ── Plugin ──────────────────────────────────────────────────────────────────
@@ -51,6 +52,60 @@ const plugin: JupyterFrontEndPlugin<void> = {
      * has unsaved content.
      */
     editor.contentChanged.connect(() => onDirtyChange(editor));
+
+    // ── Conflict resolution flow ──────────────────────────────────────────
+
+    let conflictView: ConflictView | null = null;
+    let currentSlug = '';
+
+    // Track current slug from page selection
+    browser.pageSelected.connect((_, args) => {
+      currentSlug = args.slug;
+    });
+
+    editor.conflictDetected.connect(async (_, conflictArgs) => {
+      // Dismiss any existing conflict view first
+      if (conflictView) {
+        conflictView.dispose();
+        conflictView = null;
+      }
+
+      conflictView = new ConflictView({
+        response: {
+          error: 'Stale write detected, page was modified',
+          base_content: conflictArgs.baseContent,
+          their_content: conflictArgs.theirContent
+        },
+        editorContent: conflictArgs.editorContent,
+        onResolve: (resolvedContent: string) => {
+          // Apply resolved content to editor and retry save
+          editor.setContent(resolvedContent);
+          void editor.save();
+          if (conflictView) {
+            conflictView.dispose();
+            conflictView = null;
+          }
+        },
+        onDiscard: () => {
+          // Reload the page content from the server to discard local changes
+          void browser
+            .loadPage(currentSlug)
+            .then(content => {
+              editor.setContent(content);
+            })
+            .catch(() => {
+              // Reload failed — keep editor as-is
+            });
+          if (conflictView) {
+            conflictView.dispose();
+            conflictView = null;
+          }
+        }
+      });
+
+      const layout = sidebar.layout as PanelLayout;
+      layout.insertWidget(1, conflictView);
+    });
 
     // ── Wire page click → load content into editor ─────────────────────────
 

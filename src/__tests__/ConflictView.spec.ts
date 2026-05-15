@@ -25,21 +25,27 @@ function createConflictResponse(
 /** Create a minimal editor content fixture. */
 const MOCK_EDITOR_CONTENT = 'User editor content\nWith multiple lines.';
 
+function createView(overrides?: {
+  response?: Partial<ConflictResponse>;
+  editorContent?: string;
+}) {
+  const response = createConflictResponse(overrides?.response);
+  return new ConflictView({
+    response,
+    editorContent: overrides?.editorContent ?? MOCK_EDITOR_CONTENT,
+    onResolve: jest.fn(),
+    onDiscard: jest.fn()
+  });
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('ConflictView', () => {
   let conflictView: ConflictView;
-  let onResolveMock: jest.Mock;
 
   beforeEach(() => {
     document.body.innerHTML = '';
-    onResolveMock = jest.fn();
-    const response = createConflictResponse();
-    conflictView = new ConflictView({
-      response,
-      editorContent: MOCK_EDITOR_CONTENT,
-      onResolve: onResolveMock
-    });
+    conflictView = createView();
   });
 
   afterEach(() => {
@@ -114,40 +120,83 @@ describe('ConflictView', () => {
   // ── ConflictView-actions: Accept your edits ────────────────────────────
 
   it('accept your edits button should emit editor content', () => {
-    const buttons = conflictView.node.querySelectorAll('.jp-ConflictView-btn');
+    const resolveCb = jest.fn();
+    const discardCb = jest.fn();
+    const view = createView({ editorContent: MOCK_EDITOR_CONTENT });
+    // Replace callbacks on the existing view's internal fields via re-render
+    // Instead, create a new view with fresh callbacks
+    view.dispose();
+    document.body.innerHTML = '';
+
+    const freshView = new ConflictView({
+      response: createConflictResponse(),
+      editorContent: MOCK_EDITOR_CONTENT,
+      onResolve: resolveCb,
+      onDiscard: discardCb
+    });
+
+    const buttons = freshView.node.querySelectorAll('.jp-ConflictView-btn');
     (buttons[0] as HTMLButtonElement).click();
-    expect(onResolveMock).toHaveBeenCalledWith(MOCK_EDITOR_CONTENT);
+    expect(resolveCb).toHaveBeenCalledWith(MOCK_EDITOR_CONTENT);
+    freshView.dispose();
   });
 
   // ── ConflictView-actions: Accept HEAD (theirs) ─────────────────────────
 
   it('accept HEAD button should emit their content', () => {
-    const buttons = conflictView.node.querySelectorAll('.jp-ConflictView-btn');
+    const resolveCb = jest.fn();
+    const discardCb = jest.fn();
+    const view = createView();
+    view.dispose();
+    document.body.innerHTML = '';
+
+    const freshView = new ConflictView({
+      response: createConflictResponse(),
+      editorContent: MOCK_EDITOR_CONTENT,
+      onResolve: resolveCb,
+      onDiscard: discardCb
+    });
+
+    const buttons = freshView.node.querySelectorAll('.jp-ConflictView-btn');
     (buttons[1] as HTMLButtonElement).click();
-    expect(onResolveMock).toHaveBeenCalledWith(
+    expect(resolveCb).toHaveBeenCalledWith(
       'Their content here\nLine two of theirs.'
     );
+    freshView.dispose();
   });
 
   // ── ConflictView-actions: Discard ──────────────────────────────────────
 
-  it('discard button should emit editor content (preserves undo capability)', () => {
-    const buttons = conflictView.node.querySelectorAll('.jp-ConflictView-btn');
+  it('discard button should call onDiscard callback', () => {
+    const resolveCb = jest.fn();
+    const discardCb = jest.fn();
+    const view = createView();
+    view.dispose();
+    document.body.innerHTML = '';
+
+    const freshView = new ConflictView({
+      response: createConflictResponse(),
+      editorContent: MOCK_EDITOR_CONTENT,
+      onResolve: resolveCb,
+      onDiscard: discardCb
+    });
+
+    const buttons = freshView.node.querySelectorAll('.jp-ConflictView-btn');
     (buttons[2] as HTMLButtonElement).click();
-    expect(onResolveMock).toHaveBeenCalledWith(MOCK_EDITOR_CONTENT);
+    expect(discardCb).toHaveBeenCalledTimes(1);
+    // onResolve should NOT be called for discard
+    expect(resolveCb).not.toHaveBeenCalled();
+    freshView.dispose();
   });
 
   // ── Edge cases ─────────────────────────────────────────────────────────
 
   it('should show placeholder when base_content is missing', () => {
-    const response = createConflictResponse({ base_content: undefined });
     conflictView.dispose();
     document.body.innerHTML = '';
 
-    const view = new ConflictView({
-      response,
-      editorContent: MOCK_EDITOR_CONTENT,
-      onResolve: onResolveMock
+    const view = createView({
+      response: { base_content: undefined }
     });
 
     const pres = view.node.querySelectorAll('.jp-ConflictView-content');
@@ -156,14 +205,8 @@ describe('ConflictView', () => {
   });
 
   it('should show placeholder when their_content is missing', () => {
-    const response = createConflictResponse({ their_content: undefined });
-    conflictView.dispose();
-    document.body.innerHTML = '';
-
-    const view = new ConflictView({
-      response,
-      editorContent: MOCK_EDITOR_CONTENT,
-      onResolve: onResolveMock
+    const view = createView({
+      response: { their_content: undefined }
     });
 
     const pres = view.node.querySelectorAll('.jp-ConflictView-content');

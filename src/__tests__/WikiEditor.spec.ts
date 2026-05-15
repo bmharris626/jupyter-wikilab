@@ -326,4 +326,41 @@ describe('WikiEditor', () => {
     const result = await editor.save();
     expect(result).toBe(false);
   });
+
+  it('conflictDetected signal emits with editor content on 409', async () => {
+    const mockSettings: ServerConnection.ISettings =
+      ServerConnection.makeSettings();
+
+    // Create a ResponseError with 409 status and conflict body
+    const conflictBody = {
+      error: 'Stale write detected',
+      their_content: 'HEAD content',
+      base_content: 'Base ancestor content'
+    };
+    const mockResponse = new Response(JSON.stringify(conflictBody), {
+      status: 409,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const mockError = new ServerConnection.ResponseError(mockResponse);
+
+    (savePage as jest.Mock).mockRejectedValueOnce(mockError);
+
+    const editor = createFixture();
+    editor.serverSettings = mockSettings;
+    editor.setPage('wiki-a', 'test-page', 'sha1');
+    editor.setContent('user edits here', true);
+
+    const signalSpy = jest.fn();
+    editor.conflictDetected.connect((_, data) => {
+      signalSpy(data);
+    });
+
+    await editor.save();
+
+    expect(signalSpy).toHaveBeenCalledTimes(1);
+    const emitted = signalSpy.mock.calls[0][0];
+    expect(emitted.editorContent).toBe('user edits here');
+    expect(emitted.theirContent).toBe('HEAD content');
+    expect(emitted.baseContent).toBe('Base ancestor content');
+  });
 });

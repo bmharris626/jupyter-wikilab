@@ -44,8 +44,10 @@ export interface ConflictViewProps {
   response: ConflictResponse;
   /** The user's current editor content. */
   editorContent: string;
-  /** Callback when the user selects a resolution. */
+  /** Callback when the user accepts edits (yours or theirs). */
   onResolve: (content: string) => void;
+  /** Callback when the user chooses to discard their changes. */
+  onDiscard: () => void;
 }
 
 // ── ConflictView widget ─────────────────────────────────────────────────────
@@ -70,6 +72,7 @@ export class ConflictView extends Panel {
     this._response = props.response;
     this._editorContent = props.editorContent;
     this._onResolve = props.onResolve;
+    this._onDiscard = props.onDiscard;
 
     this._createHeader();
     this._createPanes();
@@ -91,6 +94,7 @@ export class ConflictView extends Panel {
   private _response: ConflictResponse;
   private _editorContent: string;
   private _onResolve: (content: string) => void;
+  private _onDiscard: () => void;
 
   private _header!: Panel;
   private _headerText!: HTMLDivElement;
@@ -173,7 +177,7 @@ export class ConflictView extends Panel {
     );
 
     this._discardBtn = this._createButton('Discard Changes', () =>
-      this._onResolve(this._editorContent)
+      this._onDiscard()
     );
 
     this._actions.node.appendChild(this._yoursBtn);
