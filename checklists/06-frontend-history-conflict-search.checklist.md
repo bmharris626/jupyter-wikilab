@@ -34,7 +34,7 @@ Implement advanced read/reconcile workflows for a git-backed wiki.
   - **Validation:** `npx tsc --noEmit` — clean; `jlpm test` — 137/137 passed
   - **Commit suggestion:** `feat(css): add SearchPanel styles to base.css`
 
-- [ ] **Add backlinks panel section**
+- [x] **Add backlinks panel section**
   - **Task:** Fetch and render pages linking to current slug.
-  - **Validation:** `jlpm test -- WikiBrowser-backlinks`
-  - **Commit suggestion:** `feat(ui): show backlinks for active page`
+  - **Validation:** `jlpm test -- WikiBrowser` — 25/25 passed (5 new backlinks tests)
+  - **Commit suggestion:** `feat(ui): add backlinks panel to WikiBrowser sidebar`

@@ -24,7 +24,14 @@ import { ServerConnection } from '@jupyterlab/services';
 
 import { Signal } from '@lumino/signaling';
 
-import { getPage, listPages, getGitStatus, gitPull, gitPush } from '../wikiApi';
+import {
+  getPage,
+  listPages,
+  getGitStatus,
+  gitPull,
+  gitPush,
+  getBacklinks
+} from '../wikiApi';
 import type { WikiInfo, PageEntry, GitStatusResponse } from '../types';
 
 // ── CSS class namespace ─────────────────────────────────────────────────────
@@ -88,9 +95,11 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
 
     this._createToolbar();
     this._createPageList();
+    this._createBacklinks();
 
     layout.addWidget(this._toolbar);
     layout.addWidget(this._pagePanel);
+    layout.addWidget(this._backlinksPanel);
   }
 
   // ── IBrowserPanel ──────────────────────────────────────────────────────
@@ -158,6 +167,10 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     const response = await getPage(wikiId, slug, this._serverSettings);
     this._lastLoadedContent = response.content;
     this._lastLoadedSha = response.head_sha;
+
+    // Load backlinks for the selected page
+    void this._loadBacklinks(slug);
+
     return response.content;
   }
 
@@ -217,6 +230,13 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   private _pagePanel!: Panel;
   private _pageList!: HTMLUListElement;
   private _placeholder!: HTMLDivElement;
+
+  // ── Backlinks panel ────────────────────────────────────────────────────
+
+  private _backlinksPanel!: Panel;
+  private _backlinksTitle!: HTMLDivElement;
+  private _backlinksList!: HTMLUListElement;
+  private _backlinks: string[] = [];
 
   // Git status fields
   private _gitStatus: GitStatusResponse = {
@@ -327,6 +347,22 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._pagePanel.node.appendChild(this._placeholder);
   }
 
+  private _createBacklinks(): void {
+    this._backlinksPanel = new Panel();
+    this._backlinksPanel.addClass(`${CSS_PREFIX}-backlinksPanel`);
+
+    this._backlinksTitle = document.createElement('div');
+    this._backlinksTitle.className = `${CSS_PREFIX}-backlinksTitle`;
+    this._backlinksTitle.textContent = 'Backlinks';
+
+    this._backlinksList = document.createElement('ul');
+    this._backlinksList.className = `${CSS_PREFIX}-backlinksList`;
+    this._backlinksList.setAttribute('role', 'list');
+
+    this._backlinksPanel.node.appendChild(this._backlinksTitle);
+    this._backlinksPanel.node.appendChild(this._backlinksList);
+  }
+
   private _clearPageList(): void {
     this._pageList.innerHTML = '';
   }
@@ -371,6 +407,68 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
 
       li.appendChild(link);
       this._pageList.appendChild(li);
+    }
+  }
+
+  // ── Backlinks ──────────────────────────────────────────────────────────
+
+  /**
+   * Fetch backlinks for a page and render them in the backlinks panel.
+   */
+  private async _loadBacklinks(slug: string): Promise<void> {
+    const wikiId = this.activeWikiId;
+
+    if (!wikiId || !this._serverSettings) {
+      this._backlinks = [];
+      this._renderBacklinks();
+      return;
+    }
+
+    try {
+      const response = await getBacklinks(wikiId, slug, this._serverSettings);
+      this._backlinks = response.backlinks;
+    } catch {
+      this._backlinks = [];
+    }
+
+    this._renderBacklinks();
+  }
+
+  private _renderBacklinks(): void {
+    this._backlinksList.innerHTML = '';
+
+    if (this._backlinks.length === 0) {
+      return;
+    }
+
+    this._backlinksTitle.textContent = `Backlinks (${this._backlinks.length})`;
+
+    for (const backlink of this._backlinks) {
+      const li = document.createElement('li');
+      li.className = `${CSS_PREFIX}-backlinkItem`;
+
+      const link = document.createElement('a');
+      link.href = '#';
+      link.className = `${CSS_PREFIX}-backlinkLink`;
+      // Derive slug from file path (remove .md extension)
+      const slug = backlink.replace(/\.md$/, '');
+      link.textContent = backlink;
+      link.setAttribute('data-slug', slug);
+      link.setAttribute('title', `Open ${slug}`);
+
+      link.addEventListener('click', async (event: MouseEvent) => {
+        event.preventDefault();
+        try {
+          this._lastLoadedContent = await this.loadPage(slug);
+          this._emitPageSelected(slug, '');
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          this._showPlaceholder(`Failed to load "${slug}": ${message}`);
+        }
+      });
+
+      li.appendChild(link);
+      this._backlinksList.appendChild(li);
     }
   }
 

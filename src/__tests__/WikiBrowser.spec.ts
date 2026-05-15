@@ -14,10 +14,19 @@ jest.mock('../wikiApi', () => ({
   listPages: jest.fn(),
   getGitStatus: jest.fn(),
   gitPull: jest.fn(),
-  gitPush: jest.fn()
+  gitPush: jest.fn(),
+  getBacklinks: jest.fn(),
+  getPage: jest.fn()
 }));
 
-import { listPages, getGitStatus, gitPull, gitPush } from '../wikiApi';
+import {
+  listPages,
+  getGitStatus,
+  gitPull,
+  gitPush,
+  getBacklinks,
+  getPage
+} from '../wikiApi';
 
 // Minimal server settings object for API calls.
 const mockServerSettings: any = {
@@ -46,8 +55,8 @@ describe('WikiBrowser', () => {
     expect(browser.hasClass('jp-WikiBrowser')).toBe(true);
   });
 
-  it('should have a toolbar and page panel as children', () => {
-    expect(browser.widgets.length).toBe(2);
+  it('should have a toolbar, page panel, and backlinks panel as children', () => {
+    expect(browser.widgets.length).toBe(3);
   });
 
   it('should start with an empty active wiki selection', () => {
@@ -325,5 +334,98 @@ describe('WikiBrowser', () => {
     await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(gitPush).toHaveBeenCalledWith('test', mockServerSettings);
+  });
+
+  // ── Backlinks ──────────────────────────────────────────────────────────
+
+  it('should have a backlinks panel as a child widget', () => {
+    const backlinksPanel = browser.widgets[2] as any;
+    expect(backlinksPanel).toBeTruthy();
+    expect(backlinksPanel.hasClass('jp-WikiBrowser-backlinksPanel')).toBe(true);
+  });
+
+  it('should show backlinks title without count initially', () => {
+    const title = browser.node.querySelector('.jp-WikiBrowser-backlinksTitle');
+    expect(title?.textContent).toBe('Backlinks');
+  });
+
+  it('should load and render backlinks after loadPage', async () => {
+    (listPages as jest.Mock).mockResolvedValueOnce({
+      pages: [{ slug: 'home', title: 'Home', mtime: '2024-01-01' }]
+    });
+    (getPage as jest.Mock).mockResolvedValueOnce({
+      content: '# Home',
+      head_sha: 'abc123'
+    });
+    (getBacklinks as jest.Mock).mockResolvedValueOnce({
+      backlinks: ['about.md', 'contact.md']
+    });
+
+    browser.populateWikis({
+      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    });
+    browser._wikiSelect.value = 'test';
+    await browser.loadPages();
+
+    // Load a page, which triggers backlinks loading
+    await browser.loadPage('home');
+
+    // Wait for the async backlinks to load
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const backlinks = browser.node.querySelectorAll(
+      '.jp-WikiBrowser-backlinkLink'
+    );
+    expect(backlinks).toHaveLength(2);
+    expect(backlinks[0].textContent).toBe('about.md');
+    expect(backlinks[1].textContent).toBe('contact.md');
+  });
+
+  it('should show backlink count when results exist', async () => {
+    (listPages as jest.Mock).mockResolvedValueOnce({
+      pages: [{ slug: 'home', title: 'Home', mtime: '2024-01-01' }]
+    });
+    (getPage as jest.Mock).mockResolvedValueOnce({
+      content: '# Home',
+      head_sha: 'abc123'
+    });
+    (getBacklinks as jest.Mock).mockResolvedValueOnce({
+      backlinks: ['about.md', 'contact.md', 'index.md']
+    });
+
+    browser.populateWikis({
+      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    });
+    browser._wikiSelect.value = 'test';
+    await browser.loadPages();
+    await browser.loadPage('home');
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const title = browser.node.querySelector('.jp-WikiBrowser-backlinksTitle');
+    expect(title?.textContent).toBe('Backlinks (3)');
+  });
+
+  it('should handle backlinks API error gracefully', async () => {
+    (listPages as jest.Mock).mockResolvedValueOnce({
+      pages: [{ slug: 'home', title: 'Home', mtime: '2024-01-01' }]
+    });
+    (getPage as jest.Mock).mockResolvedValueOnce({
+      content: '# Home',
+      head_sha: 'abc123'
+    });
+    (getBacklinks as jest.Mock).mockRejectedValueOnce(new Error('API error'));
+
+    browser.populateWikis({
+      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    });
+    browser._wikiSelect.value = 'test';
+    await browser.loadPages();
+    await browser.loadPage('home');
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const title = browser.node.querySelector('.jp-WikiBrowser-backlinksTitle');
+    expect(title?.textContent).toBe('Backlinks');
   });
 });

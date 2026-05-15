@@ -311,3 +311,52 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* ── Wiki browser backlinks ────────────────────────────────────────────────── */
+
+.jp-WikiBrowser-backlinksPanel {
+  border-top: 1px solid var(--md-border-color);
+  background: var(--jp-layout-color1);
+}
+
+.jp-WikiBrowser-backlinksTitle {
+  padding: 6px 10px;
+  font-size: var(--jp-ui-font-size0);
+  font-weight: 600;
+  color: var(--jp-ui-font-color1);
+  border-bottom: 1px solid var(--jp-border-color2);
+  background: var(--jp-layout-color1);
+}
+
+.jp-WikiBrowser-backlinksList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.jp-WikiBrowser-backlinkItem {
+  border-bottom: 1px solid var(--jp-border-color2);
+}
+
+.jp-WikiBrowser-backlinkItem:last-child {
+  border-bottom: none;
+}
+
+.jp-WikiBrowser-backlinkLink {
+  display: block;
+  padding: 4px 10px;
+  font-size: var(--jp-ui-font-size1);
+  font-family: var(--jp-mono-font-family);
+  color: var(--jp-link-color);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jp-WikiBrowser-backlinkLink:hover {
+  background: var(--jp-layout-color2);
+  text-decoration: none;
+}
