@@ -199,3 +199,115 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* ── Search panel ──────────────────────────────────────────────────────────── */
+
+.jp-SearchPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.jp-SearchPanel-queryBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--md-border-color);
+  background: var(--jp-layout-color1);
+}
+
+.jp-SearchPanel-input {
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  font-size: var(--jp-ui-font-size1);
+  border: 1px solid var(--md-border-color);
+  border-radius: 3px;
+  background: var(--jp-input-field-background);
+  color: var(--jp-ui-font-color0);
+  outline: none;
+}
+
+.jp-SearchPanel-input:focus {
+  border-color: var(--jp-brand-color1);
+}
+
+.jp-SearchPanel-btn {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+  font-size: var(--jp-ui-font-size1);
+  border: 1px solid var(--md-border-color);
+  border-radius: 3px;
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color0);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.jp-SearchPanel-btn:hover:not(:disabled) {
+  background: var(--jp-layout-color2);
+}
+
+.jp-SearchPanel-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.jp-SearchPanel-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.jp-SearchPanel-row {
+  display: flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--jp-border-color2);
+  cursor: default;
+}
+
+.jp-SearchPanel-row:not(.jp-SearchPanel-rowHeader):hover {
+  background: var(--jp-layout-color2);
+}
+
+.jp-SearchPanel-rowHeader {
+  font-weight: 600;
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color1);
+  cursor: default;
+  background: var(--jp-layout-color1);
+  border-bottom: 2px solid var(--md-border-color);
+}
+
+.jp-SearchPanel-rowLoading,
+.jp-SearchPanel-rowEmpty {
+  padding: 12px 10px;
+  color: var(--jp-ui-font-color1);
+  font-style: italic;
+}
+
+.jp-SearchPanel-col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--jp-ui-font-size1);
+}
+
+.jp-SearchPanel-colFile {
+  flex: 0 0 120px;
+  font-family: var(--jp-mono-font-family);
+  min-width: 0;
+}
+
+.jp-SearchPanel-colLine {
+  flex: 0 0 40px;
+  font-family: var(--jp-mono-font-family);
+  text-align: center;
+  min-width: 0;
+}
+
+.jp-SearchPanel-colContent {
+  flex: 1 1 auto;
+  min-width: 0;
+}

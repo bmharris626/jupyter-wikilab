@@ -19,15 +19,20 @@ Implement advanced read/reconcile workflows for a git-backed wiki.
   - **Validation:** `jlpm test -- ConflictView` — 16/16 passed, 100% coverage
   - **Commit suggestion:** `feat(ui): add conflict view for stale-write responses`
 
-- [ ] **Implement conflict resolution actions**
+- [x] **Implement conflict resolution actions**
   - **Task:** Provide accept/discard action flows wired to editor state.
-  - **Validation:** `jlpm test -- ConflictView-actions`
-  - **Commit suggestion:** `feat(ui): add conflict resolution actions`
+  - **Validation:** `jlpm test -- ConflictView` — 16/16 passed; `jlpm test -- WikiEditor` — 27/27 passed (conflict signal test)
+  - **Commit suggestion:** `feat(ui): wire conflict resolution actions to editor state`
 
-- [ ] **Implement `SearchPanel.tsx`**
+- [x] **Implement `SearchPanel.tsx`**
   - **Task:** Add query input, execute search, render line-numbered results.
-  - **Validation:** `jlpm test -- SearchPanel-results`
+  - **Validation:** `jlpm test -- SearchPanel` — 22/22 passed
   - **Commit suggestion:** `feat(ui): add full-text search results panel`
+
+- [x] **Add CSS styles for SearchPanel**
+  - **Task:** Query bar, search button, results container, row/column styles.
+  - **Validation:** `npx tsc --noEmit` — clean; `jlpm test` — 137/137 passed
+  - **Commit suggestion:** `feat(css): add SearchPanel styles to base.css`
 
 - [ ] **Add backlinks panel section**
   - **Task:** Fetch and render pages linking to current slug.
