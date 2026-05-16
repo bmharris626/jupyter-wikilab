@@ -29,12 +29,13 @@ import type {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Build the base URL for a given wiki ID.
+ * Build the endpoint path for a given wiki ID.
  *
- * Backend route pattern: `/wikilab/api/wikis/{wiki_id}`
+ * requestAPI already prepends `wikilab/api/`, so this returns
+ * only the suffix: `wikis/{wiki_id}[/...]`
  */
 function wikiUrl(wikiId: string, ...segments: string[]): string {
-  const parts = ['wikilab', 'api', 'wikis', wikiId, ...segments];
+  const parts = ['wikis', wikiId, ...segments];
   return parts.filter(Boolean).join('/');
 }
 

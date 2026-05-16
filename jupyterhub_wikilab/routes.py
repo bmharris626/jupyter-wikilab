@@ -208,9 +208,11 @@ class WikiPageCreateHandler(APIHandler):
             )
             return
 
+        user = getattr(self.current_user, "name", None)
+
         lock = _get_wiki_lock(wiki_id)
         async with lock:
-            slug = create_page(wiki_id, title, content)
+            slug = create_page(wiki_id, title, content, user=user)
         if slug:
             self.finish(
                 json.dumps({"slug": slug, "message": "Page created successfully"})
@@ -226,9 +228,11 @@ class WikiPageDeleteHandler(APIHandler):
     @tornado.web.authenticated
     async def delete(self, wiki_id, slug):
         """Delete a page — serialized per-wiki via asyncio lock."""
+        user = getattr(self.current_user, "name", None)
+
         lock = _get_wiki_lock(wiki_id)
         async with lock:
-            success = delete_page(wiki_id, slug)
+            success = delete_page(wiki_id, slug, user=user)
         if success:
             self.finish(json.dumps({"message": "Page deleted successfully"}))
         else:

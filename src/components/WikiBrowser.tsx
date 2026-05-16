@@ -22,6 +22,8 @@ import { Panel, PanelLayout } from '@lumino/widgets';
 
 import { ServerConnection } from '@jupyterlab/services';
 
+import { InputDialog } from '@jupyterlab/apputils';
+
 import { Signal } from '@lumino/signaling';
 
 import {
@@ -30,8 +32,10 @@ import {
   getGitStatus,
   gitPull,
   gitPush,
-  getBacklinks
+  getBacklinks,
+  createPage
 } from '../wikiApi';
+import { openRegisterWikiDialog } from '../commands';
 import type { WikiInfo, PageEntry, GitStatusResponse } from '../types';
 
 // ── CSS class namespace ─────────────────────────────────────────────────────
@@ -214,6 +218,17 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   /** JupyterLab server settings — set by the plugin activator. */
   set serverSettings(settings: ServerConnection.ISettings) {
     this._serverSettings = settings;
+    // Wire the + button now that we have server settings
+    this._registerBtn.onclick = () => {
+      if (!this._serverSettings) {
+        return;
+      }
+      void openRegisterWikiDialog(this._serverSettings, () => {
+        if (this.onWikiRegistered) {
+          this.onWikiRegistered();
+        }
+      });
+    };
   }
 
   private _serverSettings: ServerConnection.ISettings | null = null;
@@ -230,6 +245,7 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   private _pagePanel!: Panel;
   private _pageList!: HTMLUListElement;
   private _placeholder!: HTMLDivElement;
+  private _newPageBtn!: HTMLButtonElement;
 
   // ── Backlinks panel ────────────────────────────────────────────────────
 
@@ -249,6 +265,10 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   private _gitStatusEl!: HTMLDivElement;
   private _pullBtn!: HTMLButtonElement;
   private _pushBtn!: HTMLButtonElement;
+  private _registerBtn!: HTMLButtonElement;
+
+  /** Optional callback invoked after a wiki is successfully registered. */
+  onWikiRegistered: (() => void) | null = null;
 
   private _onWikiChange = (): void => {
     const prev = this.wikiSelected.newValue;
@@ -264,46 +284,65 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._toolbar = new Panel();
     this._toolbar.addClass(`${CSS_PREFIX}-toolbar`);
 
+    // ── Row 1: wiki selector ───────────────────────────────────────────────
+
+    const wikiRow = document.createElement('div');
+    wikiRow.className = `${CSS_PREFIX}-toolbarRow`;
+
     const label = document.createElement('label');
-    label.textContent = 'Wiki:';
+    label.textContent = 'Wiki';
     label.className = `${CSS_PREFIX}-wikiLabel`;
 
     this._wikiSelect = document.createElement('select');
     this._wikiSelect.className = `${CSS_PREFIX}-wikiSelect`;
     this._wikiSelect.setAttribute('aria-label', 'Select a wiki');
 
-    // Default "no wiki" option
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
-    defaultOption.textContent = '— Select a wiki —';
+    defaultOption.textContent = '— none —';
     this._wikiSelect.appendChild(defaultOption);
 
     this._wikiSelect.addEventListener('change', this._onWikiChange);
-    this._toolbar.node.appendChild(label);
-    this._toolbar.node.appendChild(this._wikiSelect);
 
-    // Git status indicator (read-only)
+    // Register-wiki button — onclick wired later in set serverSettings()
+    this._registerBtn = document.createElement('button');
+    this._registerBtn.className = `${CSS_PREFIX}-iconBtn`;
+    this._registerBtn.textContent = '+';
+    this._registerBtn.setAttribute('aria-label', 'Register new wiki');
+    this._registerBtn.setAttribute('title', 'Register new wiki');
+
+    wikiRow.appendChild(label);
+    wikiRow.appendChild(this._wikiSelect);
+    wikiRow.appendChild(this._registerBtn);
+
+    // ── Row 2: git status + actions ───────────────────────────────────────
+
+    const gitRow = document.createElement('div');
+    gitRow.className = `${CSS_PREFIX}-toolbarRow ${CSS_PREFIX}-gitRow`;
+
     this._gitStatusEl = document.createElement('div');
     this._gitStatusEl.className = `${CSS_PREFIX}-gitStatus`;
     this._gitStatusEl.textContent = '—';
     this._gitStatusEl.setAttribute('aria-label', 'Git status');
-    this._toolbar.node.appendChild(this._gitStatusEl);
 
-    // Pull button
     this._pullBtn = document.createElement('button');
     this._pullBtn.className = `${CSS_PREFIX}-gitBtn`;
     this._pullBtn.textContent = '↻ Pull';
     this._pullBtn.setAttribute('aria-label', 'Pull from remote');
     this._pullBtn.addEventListener('click', () => void this._handlePull());
-    this._toolbar.node.appendChild(this._pullBtn);
 
-    // Push button
     this._pushBtn = document.createElement('button');
     this._pushBtn.className = `${CSS_PREFIX}-gitBtn`;
     this._pushBtn.textContent = '↑ Push';
     this._pushBtn.setAttribute('aria-label', 'Push to remote');
     this._pushBtn.addEventListener('click', () => void this._handlePush());
-    this._toolbar.node.appendChild(this._pushBtn);
+
+    gitRow.appendChild(this._gitStatusEl);
+    gitRow.appendChild(this._pullBtn);
+    gitRow.appendChild(this._pushBtn);
+
+    this._toolbar.node.appendChild(wikiRow);
+    this._toolbar.node.appendChild(gitRow);
   }
 
   /** Populate the wiki selector dropdown from the registry. */
@@ -336,6 +375,24 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._pagePanel = new Panel();
     this._pagePanel.addClass(`${CSS_PREFIX}-pagePanel`);
 
+    // Section header: "Pages" label + new-page button
+    const pageHeader = document.createElement('div');
+    pageHeader.className = `${CSS_PREFIX}-sectionHeader`;
+
+    const pageTitle = document.createElement('span');
+    pageTitle.className = `${CSS_PREFIX}-sectionTitle`;
+    pageTitle.textContent = 'Pages';
+
+    this._newPageBtn = document.createElement('button');
+    this._newPageBtn.className = `${CSS_PREFIX}-iconBtn`;
+    this._newPageBtn.textContent = '+';
+    this._newPageBtn.setAttribute('aria-label', 'New page');
+    this._newPageBtn.setAttribute('title', 'New page');
+    this._newPageBtn.addEventListener('click', () => void this._handleNewPage());
+
+    pageHeader.appendChild(pageTitle);
+    pageHeader.appendChild(this._newPageBtn);
+
     this._pageList = document.createElement('ul');
     this._pageList.className = `${CSS_PREFIX}-pageList`;
     this._pageList.setAttribute('role', 'list');
@@ -343,6 +400,7 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._placeholder = document.createElement('div');
     this._placeholder.className = `${CSS_PREFIX}-placeholder`;
 
+    this._pagePanel.node.appendChild(pageHeader);
     this._pagePanel.node.appendChild(this._pageList);
     this._pagePanel.node.appendChild(this._placeholder);
   }
@@ -547,6 +605,40 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     } else {
       this._pullBtn.textContent = '↻ Pull';
       this._pushBtn.textContent = '↑ Push';
+    }
+  }
+
+  private async _handleNewPage(): Promise<void> {
+    const wikiId = this.activeWikiId;
+    if (!wikiId || !this._serverSettings) {
+      return;
+    }
+
+    const result = await InputDialog.getText({
+      title: 'New Page',
+      label: 'Page title',
+      placeholder: 'My New Page',
+      okLabel: 'Create'
+    });
+
+    if (!result.button.accept || !result.value?.trim()) {
+      return;
+    }
+
+    const title = result.value.trim();
+    try {
+      const response = await createPage(
+        wikiId,
+        { title, content: `# ${title}\n\n` },
+        this._serverSettings
+      );
+      await this.loadPages();
+      // Open the new page in the editor
+      this._lastLoadedContent = await this.loadPage(response.slug);
+      this._emitPageSelected(response.slug, title);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this._showPlaceholder(`Failed to create page: ${message}`);
     }
   }
 

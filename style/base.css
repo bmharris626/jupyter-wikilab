@@ -8,28 +8,102 @@
 
 .jp-WikiBrowser-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--md-border-color);
+  flex-direction: column;
+  border-bottom: 1px solid var(--jp-border-color2);
   background: var(--jp-layout-color1);
 }
 
+/* Each row inside the toolbar */
+.jp-WikiBrowser-toolbarRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  min-height: 28px;
+}
+
+/* Git row gets a subtle top separator */
+.jp-WikiBrowser-gitRow {
+  border-top: 1px solid var(--jp-border-color3);
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
 .jp-WikiBrowser-wikiLabel {
-  font-size: var(--jp-ui-font-size1);
+  font-size: var(--jp-ui-font-size0);
   font-weight: 600;
+  color: var(--jp-ui-font-color2);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .jp-WikiBrowser-wikiSelect {
-  flex: 1 1 140px;
-  min-width: 100px;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 2px 4px;
+  height: 22px;
   font-size: var(--jp-ui-font-size1);
-  border: 1px solid var(--md-border-color);
+  border: 1px solid var(--jp-border-color1);
   border-radius: 3px;
-  background: var(--jp-input-field-background);
+  background: var(--jp-layout-color1);
   color: var(--jp-ui-font-color0);
+  cursor: pointer;
+}
+
+.jp-WikiBrowser-wikiSelect:focus {
+  outline: none;
+  border-color: var(--jp-brand-color1);
+}
+
+/* ── Shared icon button (+) ─────────────────────────────────────────────── */
+
+.jp-WikiBrowser-iconBtn {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--jp-ui-font-color1);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jp-WikiBrowser-iconBtn:hover {
+  background: var(--jp-layout-color3);
+  color: var(--jp-ui-font-color0);
+}
+
+/* ── Git action buttons ─────────────────────────────────────────────────── */
+
+.jp-WikiBrowser-gitBtn {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  height: 20px;
+  font-size: var(--jp-ui-font-size0);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 3px;
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--jp-ui-font-family);
+}
+
+.jp-WikiBrowser-gitBtn:hover:not(:disabled) {
+  background: var(--jp-layout-color3);
+  color: var(--jp-ui-font-color0);
+}
+
+.jp-WikiBrowser-gitBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* ── Git status bar ─────────────────────────────────────────────────────── */
@@ -41,31 +115,74 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 2px 0;
-  min-width: 60px;
+  color: var(--jp-ui-font-color2);
 }
 
-/* ── Git action buttons ─────────────────────────────────────────────────── */
+/* ── Section header (Pages, Backlinks, …) ───────────────────────────────── */
 
-.jp-WikiBrowser-gitBtn {
-  flex: 0 0 auto;
-  padding: 2px 8px;
+.jp-WikiBrowser-sectionHeader {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px 2px;
+  border-bottom: 1px solid var(--jp-border-color3);
+}
+
+.jp-WikiBrowser-sectionTitle {
+  flex: 1 1 auto;
   font-size: var(--jp-ui-font-size0);
-  border: 1px solid var(--md-border-color);
-  border-radius: 3px;
-  background: var(--jp-layout-color1);
-  color: var(--jp-ui-font-color0);
-  cursor: pointer;
+  font-weight: 600;
+  color: var(--jp-ui-font-color2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Page panel ─────────────────────────────────────────────────────────── */
+
+.jp-WikiBrowser-pagePanel {
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.jp-WikiBrowser-pageList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.jp-WikiBrowser-pageItem {
+  border-bottom: none;
+}
+
+.jp-WikiBrowser-pageLink {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 12px 0 16px;
+  font-size: var(--jp-ui-font-size1);
+  font-family: var(--jp-ui-font-family);
+  color: var(--jp-ui-font-color1);
+  text-decoration: none;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
 }
 
-.jp-WikiBrowser-gitBtn:hover:not(:disabled) {
+.jp-WikiBrowser-pageLink:hover {
   background: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color0);
+  text-decoration: none;
 }
 
-.jp-WikiBrowser-gitBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
+.jp-WikiBrowser-placeholder {
+  padding: 8px 12px;
+  font-size: var(--jp-ui-font-size1);
+  color: var(--jp-ui-font-color2);
+  font-style: italic;
 }
 
 /* ── Editor preview toolbar ─────────────────────────────────────────────── */
@@ -361,7 +478,40 @@
   text-decoration: none;
 }
 
-/* ── Register wiki dialog ──────────────────────────────────────────────────── */
+/* ── Register wiki showDialog body ─────────────────────────────────────────── */
+
+.jp-RegisterWikiBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 4px;
+  min-width: 360px;
+}
+
+.jp-RegisterWikiBody-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jp-RegisterWikiBody-label {
+  font-size: var(--jp-ui-font-size1);
+  font-weight: 600;
+  color: var(--jp-ui-font-color0);
+}
+
+.jp-RegisterWikiBody-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.jp-RegisterWikiBody-slugHint {
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color2);
+  font-family: var(--jp-code-font-family);
+}
+
+/* ── Register wiki dialog (legacy panel widget, kept for reference) ─────────── */
 
 .jp-RegisterWikiDialog {
   display: flex;

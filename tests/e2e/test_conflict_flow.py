@@ -80,20 +80,6 @@ async def test_stale_write_conflict(jp_fetch, tmp_path):
         )
         assert resp.code == 200
 
-        # Commit the page so it has a git SHA
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Add Home page"],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-
         # Tab A: GET the page to get head_sha
         resp_a = await jp_fetch(
             "wikilab",

@@ -79,20 +79,6 @@ async def test_history_and_rename(jp_fetch, tmp_path):
         )
         assert resp.code == 200
 
-        # Commit first version
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Initial home page"],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-
         # Save updated content (version 2)
         resp = await jp_fetch(
             "wikilab",
@@ -110,20 +96,6 @@ async def test_history_and_rename(jp_fetch, tmp_path):
         )
         assert resp.code == 200
 
-        # Commit second version
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Update home page"],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-
         # Save updated content (version 3)
         resp = await jp_fetch(
             "wikilab",
@@ -140,20 +112,6 @@ async def test_history_and_rename(jp_fetch, tmp_path):
             ),
         )
         assert resp.code == 200
-
-        # Commit third version
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Update home page again"],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
 
         # Check history: should have 3 entries
         resp = await jp_fetch(

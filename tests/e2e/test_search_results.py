@@ -96,20 +96,6 @@ async def test_search_results(jp_fetch, tmp_path):
         )
         assert resp.code == 200
 
-        # Commit pages
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Add pages"],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-
         # Search for "wiki"
         resp = await jp_fetch(
             "wikilab",

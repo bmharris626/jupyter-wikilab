@@ -9,10 +9,13 @@
  */
 
 import { JupyterFrontEnd } from '@jupyterlab/application';
+import { showDialog, Dialog, Notification } from '@jupyterlab/apputils';
+import { PageConfig } from '@jupyterlab/coreutils';
 import { ReadonlyPartialJSONObject } from '@lumino/coreutils';
 import { ServerConnection } from '@jupyterlab/services';
+import { Widget } from '@lumino/widgets';
 
-import { RegisterWikiDialog } from './components/RegisterWikiDialog';
+import { createWiki } from './wikiApi';
 
 // ── Command IDs ─────────────────────────────────────────────────────────────
 
@@ -47,9 +50,6 @@ export namespace CommandIDs {
 }
 
 // ── Command argument types ──────────────────────────────────────────────────
-
-/** Module-level reference to the active dialog (avoids duplicates). */
-let _activeDialog: RegisterWikiDialog | null = null;
 
 /** Callback registered by the main plugin to reload the wiki list. */
 let _reloadWikis: (() => void) | null = null;
@@ -92,6 +92,136 @@ export namespace CommandArguments {
     name: string;
     /** Filesystem path to the git repository. */
     path: string;
+  }
+}
+
+// ── Exported dialog function ────────────────────────────────────────────────
+
+/**
+ * Open the "Register New Wiki" modal directly, without going through the
+ * command registry. Call this from the sidebar + button so the dialog works
+ * regardless of whether the plugin's activate() has finished wiring commands.
+ */
+export async function openRegisterWikiDialog(
+  serverSettings: ServerConnection.ISettings,
+  onRegistered: () => void
+): Promise<void> {
+  console.log('[wikilab] openRegisterWikiDialog called');
+  try {
+    const body = new RegisterWikiBody();
+    const result = await showDialog({
+      title: 'Register New Wiki',
+      body,
+      focusNodeSelector: 'input',
+      buttons: [
+        Dialog.cancelButton(),
+        Dialog.okButton({ label: 'Register Wiki' })
+      ]
+    });
+
+    if (!result.button.accept) {
+      return;
+    }
+
+    const { id, name, path } = body.getValue();
+
+    if (!name || !path) {
+      void Notification.error('Name and path are required.', {
+        autoClose: 4000
+      });
+      return;
+    }
+
+    await createWiki(id, { id, name, path }, serverSettings);
+    void Notification.info(`Wiki "${name}" registered.`, { autoClose: 3000 });
+    onRegistered();
+  } catch (err) {
+    console.error('[wikilab] openRegisterWikiDialog error:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    void Notification.error(`WikiLab: ${message}`, { autoClose: 8000 });
+  }
+}
+
+// ── Register-wiki form body ─────────────────────────────────────────────────
+
+/** Convert a display name to a URL-safe wiki ID slug. */
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * Inline form body used with JupyterLab's showDialog modal.
+ * Collects a display name and filesystem path; the wiki ID is derived
+ * automatically from the name.
+ */
+class RegisterWikiBody extends Widget {
+  private _nameInput: HTMLInputElement;
+  private _pathInput: HTMLInputElement;
+  private _slugHint: HTMLSpanElement;
+
+  constructor() {
+    super();
+    this.addClass('jp-RegisterWikiBody');
+
+    const defaultPath =
+      PageConfig.getOption('serverRoot') ||
+      PageConfig.getOption('rootDir') ||
+      '';
+
+    const makeRow = (
+      labelText: string,
+      placeholder: string
+    ): { row: HTMLDivElement; input: HTMLInputElement } => {
+      const row = document.createElement('div');
+      row.className = 'jp-RegisterWikiBody-row';
+
+      const label = document.createElement('label');
+      label.className = 'jp-RegisterWikiBody-label';
+      label.textContent = labelText;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'jp-mod-styled jp-RegisterWikiBody-input';
+      input.placeholder = placeholder;
+
+      row.appendChild(label);
+      row.appendChild(input);
+      return { row, input };
+    };
+
+    const nameRow = makeRow('Name', 'My Wiki');
+    const pathRow = makeRow('Path', '/home/user/wiki');
+
+    this._nameInput = nameRow.input;
+    this._pathInput = pathRow.input;
+    this._pathInput.value = defaultPath;
+
+    // Slug hint shown below the name field
+    this._slugHint = document.createElement('span');
+    this._slugHint.className = 'jp-RegisterWikiBody-slugHint';
+    this._slugHint.textContent = 'ID: —';
+    nameRow.row.appendChild(this._slugHint);
+
+    this._nameInput.addEventListener('input', () => {
+      const slug = slugify(this._nameInput.value);
+      this._slugHint.textContent = slug ? `ID: ${slug}` : 'ID: —';
+    });
+
+    this.node.appendChild(nameRow.row);
+    this.node.appendChild(pathRow.row);
+  }
+
+  getValue(): { id: string; name: string; path: string } {
+    const name = this._nameInput.value.trim();
+    return {
+      id: slugify(name),
+      name,
+      path: this._pathInput.value.trim()
+    };
   }
 }
 
@@ -201,27 +331,48 @@ export function registerCommands(app: JupyterFrontEnd): void {
     label: 'Register New Wiki',
     caption: 'Register a new wiki repository',
     isEnabled: () => true,
-    execute: () => {
-      // Close any existing dialog to avoid duplicates
-      if (_activeDialog) {
-        _activeDialog.dispose();
-        _activeDialog = null;
-      }
+    execute: async () => {
+      console.log('[wikilab] register-wiki execute called');
+      try {
+        const body = new RegisterWikiBody();
+        const result = await showDialog({
+          title: 'Register New Wiki',
+          body,
+          focusNodeSelector: 'input',
+          buttons: [
+            Dialog.cancelButton(),
+            Dialog.okButton({ label: 'Register Wiki' })
+          ]
+        });
 
-      const serverSettings = app.serviceManager
-        .serverSettings as ServerConnection.ISettings;
-
-      _activeDialog = new RegisterWikiDialog({
-        serverSettings,
-        onRegistered: () => {
-          _activeDialog = null;
-          if (_reloadWikis) {
-            _reloadWikis();
-          }
+        if (!result.button.accept) {
+          return;
         }
-      });
 
-      app.shell.add(_activeDialog, 'main', { rank: 1000 });
+        const { id, name, path } = body.getValue();
+
+        if (!name || !path) {
+          void Notification.error('Name and path are required.', {
+            autoClose: 4000
+          });
+          return;
+        }
+
+        const serverSettings =
+          app.serviceManager.serverSettings as ServerConnection.ISettings;
+
+        await createWiki(id, { id, name, path }, serverSettings);
+        void Notification.info(`Wiki "${name}" registered.`, {
+          autoClose: 3000
+        });
+        if (_reloadWikis) {
+          _reloadWikis();
+        }
+      } catch (err) {
+        console.error('[wikilab] register-wiki error:', err);
+        const message = err instanceof Error ? err.message : String(err);
+        void Notification.error(`WikiLab: ${message}`, { autoClose: 8000 });
+      }
     }
   });
 

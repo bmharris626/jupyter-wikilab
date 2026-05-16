@@ -98,18 +98,13 @@ async def test_create_and_commit_flow(jp_fetch, tmp_path):
         body = json.loads(response.body)
         assert body["slug"] == "test-page"
 
-        # Commit the page to git (inside the patch context)
-        from jupyterhub_wikilab.git_service import commit_wiki_page
-
-        success = commit_wiki_page("create-commit-wiki", "test-page")
-        assert success is True
-
     # Verify the git log contains a commit for test-page.md
+    # create_page now auto-commits with "Add: {Title}" format
     result = subprocess.run(
-        ["git", "log", "--oneline", "--", "test-page.md"],
+        ["git", "log", "--format=%s", "--", "test-page.md"],
         cwd=str(wiki_dir),
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
-    assert "Update page" in result.stdout
+    assert "Add: Test Page" in result.stdout

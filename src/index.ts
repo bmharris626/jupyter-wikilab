@@ -85,6 +85,16 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
     const browser = new WikiBrowser();
     browser.serverSettings = serverSettings;
 
+    // ── Reload wikis after registration ───────────────────────────────────
+
+    browser.onWikiRegistered = () => {
+      void listWikis(serverSettings)
+        .then(response => {
+          browser.populateWikis(response.wikis);
+        })
+        .catch(() => {/* keep current list */});
+    };
+
     // ── WikiEditor (main area) ─────────────────────────────────────────────
 
     const editor = new WikiEditor();
@@ -117,6 +127,7 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
         conflictView = null;
       }
 
+      const cvId = `wikilab-conflict-${Date.now()}`;
       conflictView = new ConflictView({
         response: {
           error: 'Stale write detected, page was modified',
@@ -149,6 +160,8 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
       });
 
       // Place conflict view above the editor in the main area
+      conflictView.id = cvId;
+      conflictView.title.label = 'Resolve Conflict';
       app.shell.add(conflictView, 'main', { rank: 99 });
     });
 

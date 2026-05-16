@@ -127,11 +127,20 @@ def construct_commit_actor(
     return CommitActor(name, email or get_default_email(username))
 
 
+def _build_commit_message(verb: str, slug: str, actor_name: str, actor_email: str) -> str:
+    """Build a standard wiki commit message with Co-authored-by trailer."""
+    title = slug.replace("-", " ").title()
+    return (
+        f"{verb}: {title}\n\n"
+        f"Co-authored-by: {actor_name} <{actor_email}>"
+    )
+
+
 def commit_page_update(
     wiki_path: str,
     slug: str,
     user: str,
-    message_template: str = "Update page: {slug}",
+    message_template: str = "Update: {slug}",
     committer_email: Optional[str] = None,
 ) -> bool:
     """
@@ -141,7 +150,8 @@ def commit_page_update(
         wiki_path: Path to the wiki directory
         slug: Slug of the page being updated
         user: User making the update
-        message_template: Template for commit message
+        message_template: Template for commit message (legacy; ignored when
+                          the default Co-authored-by format is used)
         committer_email: Explicit email for the committer; falls back to
                          :func:`get_default_email` when omitted.
 
@@ -149,21 +159,16 @@ def commit_page_update(
         True if commit was successful, False otherwise
     """
     try:
-        # Get the repository
         repo = Repo(wiki_path)
 
-        # Create the page path
         page_name = slug if slug.endswith(".md") else f"{slug}.md"
         page_path = Path(wiki_path) / page_name
 
-        # Add the file to the index
         repo.index.add([str(page_path)])
 
-        # Create the commit actor, honouring explicit committer_email
         actor = construct_commit_actor(committer_email, username=user)
-        commit_message = message_template.format(slug=slug)
+        commit_message = _build_commit_message("Update", Path(page_name).stem, actor.name, actor.email)
 
-        # Commit with the actor information
         repo.index.commit(commit_message, author=actor, committer=actor)
 
         return True
@@ -176,7 +181,7 @@ def commit_wiki_page(
     slug: str,
     user: Optional[str] = None,
     email: str = "wikilab@example.com",
-    message_template: str = "Update page: {slug}",
+    verb: str = "Update",
 ) -> bool:
     """
     Commit a page update in a registered wiki.
@@ -188,7 +193,7 @@ def commit_wiki_page(
         slug: Page slug or markdown filename
         user: User making the update; defaults to JUPYTERHUB_USER
         email: Committer email address
-        message_template: Template for commit message
+        verb: Action verb for the commit subject line (e.g. "Update", "Add", "Delete")
 
     Returns:
         True if commit was successful, False otherwise
@@ -198,27 +203,22 @@ def commit_wiki_page(
         return False
 
     try:
-        # Ensure the directory is a git repo
         if not detect_or_init_repo(str(wiki_path), init_if_missing=True):
             return False
 
         repo = Repo(wiki_path)
         page_name = slug if slug.endswith(".md") else f"{slug}.md"
         page_path = wiki_path / page_name
-        if not page_path.exists():
-            return False
 
-        repo.index.add([str(page_path)])
+        if page_path.exists():
+            repo.index.add([str(page_path)])
         if not repo.is_dirty(index=True, working_tree=False):
             return True
 
         actor_name = user or os.environ.get("JUPYTERHUB_USER", "wikilab")
         actor = Actor(actor_name, email)
-        repo.index.commit(
-            message_template.format(slug=Path(page_name).stem),
-            author=actor,
-            committer=actor,
-        )
+        commit_message = _build_commit_message(verb, Path(page_name).stem, actor_name, email)
+        repo.index.commit(commit_message, author=actor, committer=actor)
         return True
     except Exception:
         return False
@@ -487,12 +487,15 @@ def rename_wiki_page(
 
         # Commit the rename
         actor_name = user or os.environ.get("JUPYTERHUB_USER", "wikilab")
-        actor = Actor(actor_name, email or get_default_email(user))
-        repo.index.commit(
-            f"Rename page: {old_name} to {new_name}",
-            author=actor,
-            committer=actor,
+        resolved_email = email or get_default_email(user)
+        actor = Actor(actor_name, resolved_email)
+        old_title = Path(old_name).stem.replace("-", " ").title()
+        new_title = Path(new_name).stem.replace("-", " ").title()
+        commit_message = (
+            f"Rename: {old_title} → {new_title}\n\n"
+            f"Co-authored-by: {actor_name} <{resolved_email}>"
         )
+        repo.index.commit(commit_message, author=actor, committer=actor)
         return True
     except Exception:
         return False

@@ -94,20 +94,6 @@ async def test_sidebar_override(jp_fetch, tmp_path):
             )
             assert resp.code == 200
 
-        # Commit pages
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Add pages"],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-
         # Create a _sidebar.md file that specifies custom ordering
         (wiki_dir / "_sidebar.md").write_text("mango\napple\nzebra\n", encoding="utf-8")
 

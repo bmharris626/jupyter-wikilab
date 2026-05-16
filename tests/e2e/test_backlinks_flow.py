@@ -115,20 +115,6 @@ async def test_backlinks_flow(jp_fetch, tmp_path):
         )
         assert resp.code == 200
 
-        # Commit pages so git grep can find them
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Add wiki pages"],
-            cwd=str(wiki_dir),
-            capture_output=True,
-            check=True,
-        )
-
         # Import backlinks function and verify backlinks for test-page
         from jupyterhub_wikilab.git_service import backlinks_grep_results
 

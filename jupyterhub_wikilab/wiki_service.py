@@ -298,14 +298,20 @@ def save_page(
     return commit_wiki_page(wiki_id, slug, user=user, email=email)
 
 
-def create_page(wiki_id: str, title: str, content: str) -> Optional[str]:
+def create_page(
+    wiki_id: str,
+    title: str,
+    content: str,
+    user: Optional[str] = None,
+) -> Optional[str]:
     """
-    Create a new page in a wiki.
+    Create a new page in a wiki and auto-commit it to git.
 
     Args:
         wiki_id: The wiki ID
         title: Page title
         content: Page content
+        user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
 
     Returns:
         Slug of created page or None if failed
@@ -314,34 +320,38 @@ def create_page(wiki_id: str, title: str, content: str) -> Optional[str]:
     if not wiki_path:
         return None
 
-    # Convert title to slug
     slug = slugify(title)
-
-    # Create page content
     page_path = get_page_path(wiki_path, slug)
 
     try:
-        # Create directory if needed
         page_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Write content
         with open(page_path, "w", encoding="utf-8") as f:
             f.write(content)
-        return slug
     except Exception:
         return None
 
+    from .git_service import commit_wiki_page, get_default_email
 
-def delete_page(wiki_id: str, slug: str) -> bool:
+    email = get_default_email(user)
+    committed = commit_wiki_page(wiki_id, slug, user=user, email=email, verb="Add")
+    return slug if committed else None
+
+
+def delete_page(
+    wiki_id: str,
+    slug: str,
+    user: Optional[str] = None,
+) -> bool:
     """
-    Delete a page from a wiki.
+    Delete a page from a wiki, stage the removal in git, and commit.
 
     Args:
         wiki_id: The wiki ID
         slug: Page slug
+        user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
 
     Returns:
-        True if deletion was successful, False otherwise
+        True if deletion and commit were successful, False otherwise
     """
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
@@ -351,8 +361,31 @@ def delete_page(wiki_id: str, slug: str) -> bool:
     if not page_path.exists():
         return False
 
+    from .git_service import (
+        detect_or_init_repo,
+        get_default_email,
+        _build_commit_message,
+    )
+    import os as _os
+    from git import Repo, Actor
+
     try:
-        page_path.unlink()
+        detect_or_init_repo(str(wiki_path), init_if_missing=True)
+        repo = Repo(wiki_path)
+
+        page_name = f"{slug}.md"
+        tracked = page_name in {entry[0] for entry in repo.index.entries.keys()}
+
+        if tracked:
+            repo.index.remove([str(page_path)], working_tree=True)
+        else:
+            page_path.unlink()
+
+        actor_name = user or _os.environ.get("JUPYTERHUB_USER", "wikilab")
+        email = get_default_email(user)
+        actor = Actor(actor_name, email)
+        commit_message = _build_commit_message("Delete", slug, actor_name, email)
+        repo.index.commit(commit_message, author=actor, committer=actor)
         return True
     except Exception:
         return False
