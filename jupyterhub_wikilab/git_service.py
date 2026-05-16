@@ -74,17 +74,13 @@ def detect_or_init_repo(wiki_path: str, init_if_missing: bool = True) -> bool:
         return False
 
 
-class CommitActor:
+class CommitActor(Actor):
     """
     Commit actor that supports both attribute and subscript access.
 
-    Compatible with gitpython's Actor interface while also supporting
-    dict-like access (e.g., actor["name"]).
+    Inherits from gitpython's :class:`git.Actor` and additionally supports
+    dict-like access (e.g., ``actor["name"]``).
     """
-
-    def __init__(self, name: str, email: str) -> None:
-        self.name = name
-        self.email = email
 
     def __getitem__(self, key: str) -> str:
         if key in ("name", "email"):
@@ -95,23 +91,48 @@ class CommitActor:
         return f"{self.name} <{self.email}>"
 
 
-def construct_commit_actor(email: str) -> CommitActor:
+def get_default_email(username: Optional[str] = None) -> str:
+    """
+    Derive the default committer email for a user.
+
+    Falls back to ``{username}@wikilab`` or ``wikilab@example.com``.
+
+    Args:
+        username: The username to embed in the email. Defaults to
+                  ``JUPYTERHUB_USER`` environment variable, then ``"wikilab"``.
+
+    Returns:
+        Email address suitable for git commits.
+    """
+    name = username or os.environ.get("JUPYTERHUB_USER", "wikilab")
+    return f"{name}@wikilab"
+
+
+def construct_commit_actor(
+    email: Optional[str] = None, username: Optional[str] = None
+) -> CommitActor:
     """
     Construct a commit actor from JUPYTERHUB_USER and configured email.
 
     Args:
-        email: Email address for the commit
+        email: Email address for the commit. If omitted, uses the default
+               derived from ``JUPYTERHUB_USER``.
+        username: Username for the actor name. Defaults to
+                  ``JUPYTERHUB_USER`` environment variable.
 
     Returns:
         CommitActor object for the commit
     """
-    # Get user from environment or default to 'wikilab'
-    name = os.environ.get("JUPYTERHUB_USER", "wikilab")
-    return CommitActor(name, email)
+    name = username or os.environ.get("JUPYTERHUB_USER", "wikilab")
+    return CommitActor(name, email or get_default_email(username))
 
 
 def commit_page_update(
-    wiki_path: str, slug: str, user: str, message_template: str = "Update page: {slug}"
+    wiki_path: str,
+    slug: str,
+    user: str,
+    message_template: str = "Update page: {slug}",
+    committer_email: Optional[str] = None,
 ) -> bool:
     """
     Commit page updates with standard message template.
@@ -121,6 +142,8 @@ def commit_page_update(
         slug: Slug of the page being updated
         user: User making the update
         message_template: Template for commit message
+        committer_email: Explicit email for the committer; falls back to
+                         :func:`get_default_email` when omitted.
 
     Returns:
         True if commit was successful, False otherwise
@@ -136,8 +159,8 @@ def commit_page_update(
         # Add the file to the index
         repo.index.add([str(page_path)])
 
-        # Create the commit
-        actor = construct_commit_actor("wikilab@example.com")
+        # Create the commit actor, honouring explicit committer_email
+        actor = construct_commit_actor(committer_email, username=user)
         commit_message = message_template.format(slug=slug)
 
         # Commit with the actor information
@@ -158,6 +181,8 @@ def commit_wiki_page(
     """
     Commit a page update in a registered wiki.
 
+    Initialises the git repository for the wiki if it does not already exist.
+
     Args:
         wiki_id: The wiki ID
         slug: Page slug or markdown filename
@@ -173,6 +198,10 @@ def commit_wiki_page(
         return False
 
     try:
+        # Ensure the directory is a git repo
+        if not detect_or_init_repo(str(wiki_path), init_if_missing=True):
+            return False
+
         repo = Repo(wiki_path)
         page_name = slug if slug.endswith(".md") else f"{slug}.md"
         page_path = wiki_path / page_name
@@ -397,152 +426,73 @@ def get_remote_status_pull_push_wrappers(wiki_path: str) -> Dict:
         return {"error": f"Failed to get repository status: {str(e)}"}
 
 
-def get_git_repo(wiki_id: str) -> Optional[Repo]:
+def rename_wiki_page(
+    wiki_id: str,
+    old_name: str,
+    new_name: str,
+    user: Optional[str] = None,
+    email: Optional[str] = None,
+) -> bool:
     """
-    Get the Git repository for a wiki.
+    Rename a page using git-aware semantics and commit the change.
+
+    If the old file is tracked in git, uses ``git mv``.  Otherwise performs a
+    filesystem rename and stages the add + delete manually so the commit still
+    reflects a rename.
 
     Args:
-        wiki_id: The ID of the wiki
+        wiki_id: The wiki ID.
+        old_name: Existing page name (e.g. ``"old-page.md"``).
+        new_name: New page name (e.g. ``"new-page.md"``).
+        user: Username for the git committer.
+        email: Email for the git committer.
 
     Returns:
-        Git repository object or None
+        True if rename and commit were successful, False otherwise.
     """
-    try:
-        wiki_path = get_wiki_path(wiki_id)
-        return Repo(wiki_path)
-    except Exception:
-        return None
-
-
-def init_wiki_git(wiki_id: str, name: str = "wikilab") -> bool:
-    """
-    Initialize a Git repository for a wiki.
-
-    Args:
-        wiki_id: The ID of the wiki
-        name: Name for the repository
-
-    Returns:
-        True if repository was initialized successfully, False otherwise
-    """
-    try:
-        wiki_path = get_wiki_path(wiki_id)
-        repo = Repo.init(wiki_path)
-        return True
-    except Exception:
+    wiki_path = get_wiki_path(wiki_id)
+    if wiki_path is None:
         return False
 
-
-def commit_wiki_page(wiki_id: str, slug: str, message: str = "Update page") -> bool:
-    """
-    Commit a page to the Git repository.
-
-    Args:
-        wiki_id: The ID of the wiki
-        slug: Slug of the page being updated
-        message: Commit message
-
-    Returns:
-        True if commit was successful, False otherwise
-    """
-    try:
-        wiki_path = get_wiki_path(wiki_id)
-        repo = Repo(wiki_path)
-
-        # Create the page path
-        page_path = Path(wiki_path) / f"{slug}.md"
-
-        # Add the file to the index
-        repo.index.add([str(page_path)])
-
-        # Create the commit
-        actor = construct_commit_actor("wikilab@example.com")
-
-        # Commit with the actor information
-        repo.index.commit(message, author=actor, committer=actor)
-
-        return True
-    except Exception:
+    # Ensure the directory is a git repo
+    if not detect_or_init_repo(str(wiki_path), init_if_missing=True):
         return False
 
-
-def get_wiki_git_status(wiki_id: str) -> Dict:
-    """
-    Get the status of a wiki's Git repository.
-
-    Args:
-        wiki_id: The ID of the wiki
-
-    Returns:
-        Dictionary with status information
-    """
     try:
-        wiki_path = get_wiki_path(wiki_id)
         repo = Repo(wiki_path)
 
-        # Get status information
-        status = {
-            "branch": repo.active_branch.name if repo.active_branch else "unknown",
-            "ahead": 0,
-            "behind": 0,
-            "dirty": repo.is_dirty(),
-            "untracked": len(repo.untracked_files),
-        }
+        old_path = wiki_path / old_name
+        new_path = wiki_path / new_name
 
-        # Get ahead/behind status if there's a remote
-        try:
-            # Check for remote tracking
-            if repo.heads and len(repo.heads) > 0 and repo.heads[0].tracking_branch():
-                tracking_branch = repo.heads[0].tracking_branch()
-                status["ahead"] = len(
-                    list(repo.iter_commits(f"{tracking_branch}..HEAD"))
-                )
-                status["behind"] = len(
-                    list(repo.iter_commits(f"HEAD..{tracking_branch}"))
-                )
-        except Exception:
-            pass
+        if not old_path.exists():
+            return False
 
-        return status
-    except Exception as e:
-        return {"error": f"Failed to get repository status: {str(e)}"}
+        # Determine if the old file is already tracked in git
+        tracked = str(old_path) in {k[0] for k in repo.index.entries.keys()}
 
+        if tracked:
+            # Use git mv for tracked files (preserves rename in history)
+            subprocess.run(
+                ["git", "mv", str(old_path), str(new_path)],
+                cwd=str(wiki_path),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            # Untracked: filesystem rename + manual staging (add new, skip
+            # remove since old_path is not in the index)
+            old_path.rename(new_path)
+            repo.index.add([str(new_path)])
 
-def git_pull_wiki(wiki_id: str) -> bool:
-    """
-    Pull changes from the remote repository.
-
-    Args:
-        wiki_id: The ID of the wiki
-
-    Returns:
-        True if pull was successful, False otherwise
-    """
-    try:
-        wiki_path = get_wiki_path(wiki_id)
-        repo = Repo(wiki_path)
-        origin = repo.remotes.origin
-        origin.pull()
-        return True
-    except Exception:
-        return False
-
-
-def git_push_wiki(wiki_id: str) -> bool:
-    """
-    Push changes to the remote repository.
-
-    Args:
-        wiki_id: The ID of the wiki
-
-    Returns:
-        True if push was successful, False otherwise
-    """
-    try:
-        wiki_path = get_wiki_path(wiki_id)
-        repo = Repo(wiki_path)
-        origin = repo.remotes.origin
-        origin.push()
+        # Commit the rename
+        actor_name = user or os.environ.get("JUPYTERHUB_USER", "wikilab")
+        actor = Actor(actor_name, email or get_default_email(user))
+        repo.index.commit(
+            f"Rename page: {old_name} to {new_name}",
+            author=actor,
+            committer=actor,
+        )
         return True
     except Exception:
         return False

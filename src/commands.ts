@@ -74,12 +74,16 @@ export namespace CommandArguments {
     title: string;
     /** Optional initial content. */
     content?: string;
+    /** Optional explicit committer email for the git commit. */
+    committer_email?: string;
   }
 
   /** Arguments for the renamePage command. */
   export interface IRenamePage {
     /** New page title. */
     newTitle: string;
+    /** Optional explicit committer email for the git commit. */
+    committer_email?: string;
   }
 
   /** Arguments for the registerWiki command. */

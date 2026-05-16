@@ -13,6 +13,8 @@ This folder breaks implementation into **small, independently committable tasks*
 - `06-frontend-history-conflict-search.checklist.md`
 - `07-plugin-settings-integration.checklist.md`
 - `08-smoke-e2e-docs.checklist.md`
+- `09-plan-gap-remediation.checklist.md`
+- `10-committer-email-end-to-end.checklist.md`
 
 ---
 
@@ -81,7 +83,7 @@ When escalating, include:
 
 Project is done when:
 
-- All checkboxes in `00` through `08` are completed.
+- All checkboxes in `00` through `10` are completed.
 - Smoke workflow passes end-to-end.
 - Quickstart and troubleshooting docs exist and match implemented behavior.
 - No known blocking issues remain in escalation queue.

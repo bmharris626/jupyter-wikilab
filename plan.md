@@ -22,10 +22,10 @@ JupyterHub instances are shared across multiple users and groups, each with diff
 jupyter-wikilab/
 ├── jupyter_wikilab/           # Python server package (jupyter_server extension)
 │   ├── __init__.py            # _load_jupyter_server_extension()
-│   ├── handlers.py            # Tornado REST handlers
+│   ├── routes.py              # Tornado REST handlers
 │   ├── git_service.py         # gitpython wrapper (commits, push/pull, log, grep)
 │   ├── wiki_service.py        # Wiki registration, page CRUD, slug<->path mapping
-│   └── search_service.py      # git grep orchestration
+│   └── wiki_registry.py       # Persistent wiki registry (JSON-backed)
 ├── src/                       # TypeScript/React frontend
 │   ├── index.ts               # Plugin activation, commands, sidebar registration
 │   ├── tokens.ts              # IWikiService plugin token
@@ -47,9 +47,11 @@ jupyter-wikilab/
 ```
 
 Scaffold using the official copier template:
+
 ```
 copier copy --trust https://github.com/jupyterlab/extension-template .
 ```
+
 Choose: frontend + server extension, JupyterLab 4.x, hatch build backend.
 
 ---
@@ -58,94 +60,118 @@ Choose: frontend + server extension, JupyterLab 4.x, hatch build backend.
 
 Base path: `/wikilab/api/`
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/wikis` | List registered wikis for this user |
-| POST | `/wikis` | Register a new wiki (name, path) |
-| DELETE | `/wikis/{wiki_id}` | Unregister a wiki |
-| GET | `/wikis/{wiki_id}/pages` | List all pages (slug, title, mtime) |
-| GET | `/wikis/{wiki_id}/pages/{slug}` | Get page content + current HEAD SHA |
-| PUT | `/wikis/{wiki_id}/pages/{slug}` | Save page (body: content, head_sha) |
-| POST | `/wikis/{wiki_id}/pages` | Create page (body: title, content) |
-| DELETE | `/wikis/{wiki_id}/pages/{slug}` | Delete page |
-| POST | `/wikis/{wiki_id}/pages/{slug}/rename` | Rename page (body: new_title) |
-| GET | `/wikis/{wiki_id}/pages/{slug}/history` | git log for this file |
-| GET | `/wikis/{wiki_id}/pages/{slug}/history/{sha}` | Page content at a commit |
-| GET | `/wikis/{wiki_id}/backlinks/{slug}` | Pages that link to this slug (git grep) |
-| GET | `/wikis/{wiki_id}/search?q=` | Full-text search (git grep) |
-| GET | `/wikis/{wiki_id}/git/status` | Ahead/behind counts vs remote |
-| POST | `/wikis/{wiki_id}/git/pull` | Pull from remote |
-| POST | `/wikis/{wiki_id}/git/push` | Push to remote |
+> **Note:** The implementation uses explicit action suffixes (`/create`, `/delete`, `/rename`, `/search`) and
+> page-scoped backlinks/history rather than the original `/pages` verb-based paths. This avoids HTTP-method
+> ambiguity on a single path segment.
+
+| Method | Path                                          | Purpose                                                                     |
+| ------ | --------------------------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/wikis`                                      | List registered wikis for this user                                         |
+| POST   | `/wikis/{wiki_id}`                            | Register a new wiki (body: id, name, path)                                  |
+| DELETE | `/wikis/{wiki_id}/delete`                     | Unregister a wiki                                                           |
+| GET    | `/wikis/{wiki_id}/pages`                      | List all pages (slug, title, mtime)                                         |
+| GET    | `/wikis/{wiki_id}/pages/{slug}`               | Get page content + current HEAD SHA                                         |
+| PUT    | `/wikis/{wiki_id}/pages/{slug}`               | Save page (body: content, head_sha)                                         |
+| POST   | `/wikis/{wiki_id}/pages/create`               | Create page (body: title, content)                                          |
+| DELETE | `/wikis/{wiki_id}/pages/{slug}/delete`        | Delete page                                                                 |
+| POST   | `/wikis/{wiki_id}/pages/{slug}/rename`        | Rename page (body: new_title)                                               |
+| GET    | `/wikis/{wiki_id}/pages/{slug}/history`       | git log for this file                                                       |
+| GET    | `/wikis/{wiki_id}/pages/{slug}/history/{sha}` | Page content at a commit                                                    |
+| GET    | `/wikis/{wiki_id}/pages/{slug}/backlinks`     | Pages that link to this slug (git grep)                                     |
+| GET    | `/wikis/{wiki_id}/pages/search?term=`         | Full-text search (git grep; query param: `term`, optional `case_sensitive`) |
+| GET    | `/wikis/{wiki_id}/git/status`                 | Ahead/behind counts vs remote                                               |
+| POST   | `/wikis/{wiki_id}/git/pull`                   | Pull from remote                                                            |
+| POST   | `/wikis/{wiki_id}/git/push`                   | Push to remote                                                              |
 
 ---
 
 ## Key Implementation Details
 
 ### 1. Wiki registration storage
+
 Stored at `~/.jupyter/wikilab/wikis.json` (per-user, created on first use).
+
 ```json
 [
-  {"id": "abc123", "name": "My Notes", "path": "/home/alice/notes-wiki"},
-  {"id": "def456", "name": "Team Docs", "path": "/shared/team/wiki"}
+  { "id": "abc123", "name": "My Notes", "path": "/home/alice/notes-wiki" },
+  { "id": "def456", "name": "Team Docs", "path": "/shared/team/wiki" }
 ]
 ```
+
 Path validation on registration: path must exist, must be a git repo OR user must confirm init; path must be readable+writable by the spawned user (rely on POSIX — no extra ACL checks).
 
 ### 2. Git commit identity
+
 Read `JUPYTERHUB_USER` environment variable as the committer name. Email pulled from user settings (schema field `committerEmail`, default `{username}@wikilab`). Applied per-commit via gitpython `Actor(name, email)`. This prevents `root@hostname` commits.
 
 ### 3. Shared-wiki concurrency
+
 Use a **per-wiki asyncio file lock** (Python `asyncio.Lock` keyed by wiki path) around all write operations (save, rename, delete, commit). This serializes edits from multiple users on the same working tree. Trade-off: simple, correct for wiki-scale usage; not suitable for high-frequency concurrent writes (declared acceptable).
 
 ### 4. Stale-write detection (conflict prevention)
-On `GET /pages/{slug}`, response includes the current `head_sha` (git rev-parse HEAD).  
-On `PUT /pages/{slug}`, client sends back `head_sha`. Server checks `repo.head.commit.hexsha` before committing:
+
+On `GET /wikis/{wiki_id}/pages/{slug}`, response includes the current `head_sha` (git rev-parse HEAD).  
+On `PUT /wikis/{wiki_id}/pages/{slug}`, client sends back `head_sha`. Server checks `repo.head.commit.hexsha` before committing:
+
 - Match → commit, return new `head_sha`.
 - Mismatch → **409 Conflict** with both the base and current content in the response body.  
-Frontend `ConflictView.tsx` presents a three-panel diff (base / yours / theirs) with accept/discard controls.
+  Frontend `ConflictView.tsx` presents a three-panel diff (base / yours / theirs) with accept/discard controls.
 
 ### 5. Auto-commit on save
+
 Every successful `PUT` creates a git commit:
+
 ```
 Update: {Page Title}
 
 Co-authored-by: {username} <{email}>
 ```
+
 No staging area exposed to users. Commit happens inside the wiki lock.
 
 ### 6. Page naming / slugification
+
 - Title → slug: lowercase, spaces → hyphens, strip non-alphanumeric except hyphens.
 - File stored as `{slug}.md` at repo root (or subpath for nested pages).
 - Special filenames: `home.md` (default landing page), `_sidebar.md` (custom nav).
 - Rename = `git mv old.md new.md` + commit.
 
 ### 7. Markdown engine
+
 Use **`markdown-it`** (TypeScript) with these plugins:
+
 - `markdown-it-anchor` — heading anchors
 - `markdown-it-table-of-contents` — `[[_TOC_]]` token → auto-generated TOC
 - Custom plugin for `[[Page Name]]` wiki links → rendered as `<a href="...">Page Name</a>`. Implementation: match `\[\[([^\]]+)\]\]` globally (fix GitLab's "consumes rest of line" bug — deliberate, minor divergence from GitLab behavior in edge cases).
 - `highlight.js` — syntax highlighting in fenced code blocks
 
 ### 8. Backlinks
-On page open, frontend calls `GET /backlinks/{slug}`. Backend runs:
+
+On page open, frontend calls `GET /wikis/{wiki_id}/pages/{slug}/backlinks`. Backend runs:
+
 ```python
 repo.git.grep("-l", slug, "--", "*.md")
 ```
+
 Returns list of pages that reference this slug. Displayed in sidebar below page index. No pre-built index — always current.
 
 ### 9. Full-text search
-`GET /search?q={term}` → backend runs `git grep -n -i {term} -- *.md`, parses output into `{slug, title, line_number, excerpt}` list. Displayed in a search panel (opens in main area or sidebar, TBD during implementation).
+
+`GET /wikis/{wiki_id}/pages/search?term={term}` → backend runs `git grep -n -i {term} -- *.md`, parses output into `{slug, title, line_number, excerpt}` list. Displayed in a search panel (opens in main area or sidebar, TBD during implementation).
 
 ### 10. Unsaved change detection
+
 `WikiEditor.tsx` tracks `isDirty: boolean`. Tab title shows `• Page Title` when dirty. `beforeunload` / widget close handler warns if dirty. Auto-save (debounced 30s) is **not** included — user presses Ctrl+S or Save button to commit.
 
 ### 11. Left sidebar — Wiki Browser
+
 - Top: dropdown to select active wiki + "+" button to register a new wiki.
 - Below: page tree (alphabetical or `_sidebar.md`-ordered when present).
 - Bottom: search input + backlinks section for the current page.
 - Git status indicator: "↑2 ↓1" ahead/behind, Push/Pull buttons.
 
 ### 12. Main area — WikiEditor
+
 - `MainAreaWidget` containing a split panel.
 - Left: CodeMirror 6 editor (markdown mode, line numbers, undo stack).
 - Right: rendered HTML from `markdown-it`, wiki links are clickable and open pages.
@@ -159,7 +185,7 @@ Returns list of pages that reference this slug. Displayed in sidebar below page 
 1. **Scaffold** — run copier template, configure pyproject.toml, package.json.
 2. **`wiki_service.py`** — registration, slug mapping, page CRUD (no git yet).
 3. **`git_service.py`** — gitpython wrapper: init, commit, log, grep, push/pull.
-4. **`handlers.py`** — wire REST endpoints to services, add file lock, conflict detection.
+4. **`routes.py`** — wire REST endpoints to services, add file lock, conflict detection.
 5. **`wikiApi.ts`** — typed HTTP client for all REST endpoints.
 6. **`markdownRenderer.ts`** — markdown-it instance with all plugins.
 7. **`WikiBrowser.tsx`** — sidebar panel (wiki selector, page list, git status).

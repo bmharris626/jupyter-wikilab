@@ -234,19 +234,25 @@ def get_page_with_sha(wiki_id: str, slug: str) -> Optional[dict]:
 
 
 def save_page(
-    wiki_id: str, slug: str, content: str, head_sha: Optional[str] = None
+    wiki_id: str,
+    slug: str,
+    content: str,
+    head_sha: Optional[str] = None,
+    user: Optional[str] = None,
 ) -> bool:
     """
-    Save a page to a wiki.
+    Save a page to a wiki and auto-commit the change.
 
     Args:
         wiki_id: The wiki ID
         slug: Page slug
         content: Page content
         head_sha: Expected head SHA for conflict detection
+        user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
 
     Returns:
-        True if save was successful, False if head_sha did not match
+        True if save and commit were successful, False if head_sha did not match
+        or commit failed.
 
     Raises:
         ConflictError: If head_sha was provided but did not match current HEAD
@@ -282,9 +288,14 @@ def save_page(
         # Write content
         with open(page_path, "w", encoding="utf-8") as f:
             f.write(content)
-        return True
     except Exception:
         return False
+
+    # Auto-commit the change (Gap 1 + Gap 2)
+    from .git_service import commit_wiki_page, get_default_email
+
+    email = get_default_email(user)
+    return commit_wiki_page(wiki_id, slug, user=user, email=email)
 
 
 def create_page(wiki_id: str, title: str, content: str) -> Optional[str]:
@@ -347,17 +358,20 @@ def delete_page(wiki_id: str, slug: str) -> bool:
         return False
 
 
-def rename_page(wiki_id: str, slug: str, new_title: str) -> bool:
+def rename_page(
+    wiki_id: str, slug: str, new_title: str, user: Optional[str] = None
+) -> bool:
     """
-    Rename a page in a wiki.
+    Rename a page in a wiki using ``git mv`` semantics and commit the change.
 
     Args:
         wiki_id: The wiki ID
         slug: Current page slug
         new_title: New page title
+        user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
 
     Returns:
-        True if rename was successful, False otherwise
+        True if rename and commit were successful, False otherwise
     """
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
@@ -366,15 +380,10 @@ def rename_page(wiki_id: str, slug: str, new_title: str) -> bool:
     # Convert new title to slug
     new_slug = slugify(new_title)
 
-    old_path = get_page_path(wiki_path, slug)
-    new_path = get_page_path(wiki_path, new_slug)
+    old_page = f"{slug}.md"
+    new_page = f"{new_slug}.md"
 
-    if not old_path.exists():
-        return False
+    # Use git service for rename with git mv + commit
+    from .git_service import rename_wiki_page
 
-    try:
-        # Rename file
-        old_path.rename(new_path)
-        return True
-    except Exception:
-        return False
+    return rename_wiki_page(wiki_id, old_page, new_page, user=user)

@@ -23,14 +23,28 @@ from jupyterhub_wikilab.wiki_service import (
 )
 
 # Per-wiki asyncio locks for serializing write operations
+# Keyed by canonical path (not wiki_id) so wikis sharing the same
+# filesystem path correctly serialize concurrent writes.
 _wiki_locks: Dict[str, asyncio.Lock] = {}
 
 
 def _get_wiki_lock(wiki_id: str) -> asyncio.Lock:
-    """Get or create an asyncio lock for a given wiki."""
-    if wiki_id not in _wiki_locks:
-        _wiki_locks[wiki_id] = asyncio.Lock()
-    return _wiki_locks[wiki_id]
+    """Get or create an asyncio lock for a given wiki, keyed by its
+    canonical filesystem path rather than wiki_id.
+    """
+    from .wiki_service import get_wiki_path
+
+    path = get_wiki_path(wiki_id)
+    if path is None:
+        # Fallback: if wiki is not registered yet, fall back to wiki_id
+        # so the lock still provides some serialization.
+        cache_key = wiki_id
+    else:
+        cache_key = str(path)
+
+    if cache_key not in _wiki_locks:
+        _wiki_locks[cache_key] = asyncio.Lock()
+    return _wiki_locks[cache_key]
 
 
 from jupyterhub_wikilab.git_service import (
@@ -152,10 +166,12 @@ class WikiPageContentHandler(APIHandler):
             self.finish(json.dumps({"error": "Missing content"}))
             return
 
+        user = getattr(self.current_user, "name", None)
+
         lock = _get_wiki_lock(wiki_id)
         try:
             async with lock:
-                success = save_page(wiki_id, slug, content, head_sha)
+                success = save_page(wiki_id, slug, content, head_sha, user=user)
         except ConflictError as exc:
             self.set_status(409)
             response = {
@@ -234,9 +250,11 @@ class WikiPageRenameHandler(APIHandler):
             self.finish(json.dumps({"error": "Missing new_title"}))
             return
 
+        user = getattr(self.current_user, "name", None)
+
         lock = _get_wiki_lock(wiki_id)
         async with lock:
-            success = rename_page(wiki_id, slug, new_title)
+            success = rename_page(wiki_id, slug, new_title, user=user)
         if success:
             self.finish(json.dumps({"message": "Page renamed successfully"}))
         else:

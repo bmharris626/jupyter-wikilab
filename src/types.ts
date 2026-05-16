@@ -62,12 +62,16 @@ export interface PageGetResponse {
 export interface PageSaveRequest {
   content: string;
   head_sha?: string;
+  /** Optional committer email (from user settings). */
+  committer_email?: string;
 }
 
 /** POST /wikis/{id}/pages request body. */
 export interface PageCreateRequest {
   title: string;
   content: string;
+  /** Optional committer email (from user settings). */
+  committer_email?: string;
 }
 
 /** POST /wikis/{id}/pages/{slug} response body (newly created). */
@@ -79,6 +83,8 @@ export interface PageCreateResponse {
 /** POST /wikis/{id}/pages/{slug}/rename request body. */
 export interface PageRenameRequest {
   new_title: string;
+  /** Optional committer email (from user settings). */
+  committer_email?: string;
 }
 
 // ── Conflict types ──────────────────────────────────────────────────────────

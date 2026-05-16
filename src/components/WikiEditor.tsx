@@ -200,6 +200,16 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
     this._updateSaveButton();
   }
 
+  /**
+   * Set the committer email to use for git commits.
+   *
+   * Populated from user settings at startup.
+   */
+  set committerEmail(email: string) {
+    this._committerEmail = email;
+  }
+  private _committerEmail = '';
+
   private _updateSaveButton(): void {
     if (this._isDirty) {
       this._saveBtn.textContent = 'Save *';
@@ -233,7 +243,8 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
         this._slug,
         {
           content: this.content,
-          head_sha: this._currentSha
+          head_sha: this._currentSha,
+          committer_email: this._committerEmail || undefined
         },
         this._serverSettings
       );
