@@ -48,6 +48,27 @@ import type { PageEntry, GitStatusResponse } from '../types';
 
 const CSS_PREFIX = 'jp-WikiBrowser';
 
+/** Extract a human-readable message from any thrown value. */
+function _extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    // ServerConnection.ResponseError sets message to the raw response body
+    // which may stringify as '[object Object]'. Try the error field first.
+    const asAny = err as any;
+    if (asAny.error && typeof asAny.error === 'string') {
+      return asAny.error;
+    }
+    if (err.message && err.message !== '[object Object]') {
+      return err.message;
+    }
+    return 'Server error';
+  }
+  if (err && typeof err === 'object') {
+    const asAny = err as any;
+    return asAny.error || asAny.message || JSON.stringify(err);
+  }
+  return String(err);
+}
+
 /** Escape a string for safe use inside a RegExp literal. */
 function _escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -780,7 +801,7 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       );
       this.setActiveWiki(info.id, info.name, info.path);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
+      const message = _extractErrorMessage(err);
       this._showPlaceholder(`Failed to initialize wiki: ${message}`);
     }
   }

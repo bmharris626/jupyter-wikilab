@@ -3,8 +3,6 @@
 import json
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 
 from jupyterhub_wikilab import wiki_service
@@ -31,12 +29,11 @@ def _make_wiki_dir(tmp_path: Path, wiki_id: str, name: str = "Test") -> Path:
 async def test_probe_returns_is_wiki_true(jp_fetch, tmp_path):
     wiki_path = _make_wiki_dir(tmp_path, "probe-wiki")
     try:
-        with patch("jupyterhub_wikilab.routes._SERVER_ROOT", str(tmp_path)):
-            response = await jp_fetch(
-                "wikilab", "api", "probe",
-                params={"path": str(wiki_path)},
-                method="GET",
-            )
+        response = await jp_fetch(
+            "wikilab", "api", "probe",
+            params={"path": str(wiki_path)},
+            method="GET",
+        )
         assert response.code == 200
         payload = json.loads(response.body)
         assert payload["is_wiki"] is True
@@ -50,12 +47,11 @@ async def test_probe_returns_is_wiki_false_no_marker(jp_fetch, tmp_path):
     dir_path = tmp_path / "plain-dir"
     dir_path.mkdir()
     subprocess.run(["git", "init"], cwd=dir_path, check=True, capture_output=True)
-    with patch("jupyterhub_wikilab.routes._SERVER_ROOT", str(tmp_path)):
-        response = await jp_fetch(
-            "wikilab", "api", "probe",
-            params={"path": str(dir_path)},
-            method="GET",
-        )
+    response = await jp_fetch(
+        "wikilab", "api", "probe",
+        params={"path": str(dir_path)},
+        method="GET",
+    )
     assert response.code == 200
     assert json.loads(response.body) == {"is_wiki": False}
 
@@ -66,12 +62,11 @@ async def test_probe_returns_is_wiki_false_no_git(jp_fetch, tmp_path):
     (dir_path / MARKER_FILE).write_text(
         json.dumps({"id": "x", "name": "x"}), encoding="utf-8"
     )
-    with patch("jupyterhub_wikilab.routes._SERVER_ROOT", str(tmp_path)):
-        response = await jp_fetch(
-            "wikilab", "api", "probe",
-            params={"path": str(dir_path)},
-            method="GET",
-        )
+    response = await jp_fetch(
+        "wikilab", "api", "probe",
+        params={"path": str(dir_path)},
+        method="GET",
+    )
     assert response.code == 200
     assert json.loads(response.body) == {"is_wiki": False}
 
@@ -82,22 +77,15 @@ async def test_probe_missing_path_param_returns_400(jp_fetch):
     assert "400" in str(exc_info.value)
 
 
-async def test_probe_outside_server_root_returns_403(jp_fetch, tmp_path):
-    wiki_path = _make_wiki_dir(tmp_path, "outside-wiki")
-    try:
-        # Set server root to a sibling directory so wiki_path is outside it
-        other_root = tmp_path.parent / "other"
-        other_root.mkdir(exist_ok=True)
-        with patch("jupyterhub_wikilab.routes._SERVER_ROOT", str(other_root)):
-            with pytest.raises(Exception) as exc_info:
-                await jp_fetch(
-                    "wikilab", "api", "probe",
-                    params={"path": str(wiki_path)},
-                    method="GET",
-                )
-        assert "403" in str(exc_info.value)
-    finally:
-        wiki_service._WIKI_CACHE.pop("outside-wiki", None)
+async def test_probe_relative_path_returns_400(jp_fetch):
+    """probe rejects relative (non-absolute) paths."""
+    with pytest.raises(Exception) as exc_info:
+        await jp_fetch(
+            "wikilab", "api", "probe",
+            params={"path": "relative/path"},
+            method="GET",
+        )
+    assert "400" in str(exc_info.value)
 
 
 # ── Init endpoint ─────────────────────────────────────────────────────────────
@@ -106,12 +94,11 @@ async def test_probe_outside_server_root_returns_403(jp_fetch, tmp_path):
 async def test_init_creates_wiki(jp_fetch, tmp_path):
     new_dir = tmp_path / "new-wiki"
     new_dir.mkdir()
-    with patch("jupyterhub_wikilab.routes._SERVER_ROOT", str(tmp_path)):
-        response = await jp_fetch(
-            "wikilab", "api", "init",
-            method="POST",
-            body=json.dumps({"path": str(new_dir), "name": "Brand New Wiki"}),
-        )
+    response = await jp_fetch(
+        "wikilab", "api", "init",
+        method="POST",
+        body=json.dumps({"path": str(new_dir), "name": "Brand New Wiki"}),
+    )
     assert response.code == 200
     payload = json.loads(response.body)
     assert payload["name"] == "Brand New Wiki"
@@ -128,26 +115,21 @@ async def test_init_creates_wiki(jp_fetch, tmp_path):
 async def test_init_missing_fields_returns_400(jp_fetch, tmp_path):
     new_dir = tmp_path / "missing-name"
     new_dir.mkdir()
-    with patch("jupyterhub_wikilab.routes._SERVER_ROOT", str(tmp_path)):
-        with pytest.raises(Exception) as exc_info:
-            await jp_fetch(
-                "wikilab", "api", "init",
-                method="POST",
-                body=json.dumps({"path": str(new_dir)}),
-            )
+    with pytest.raises(Exception) as exc_info:
+        await jp_fetch(
+            "wikilab", "api", "init",
+            method="POST",
+            body=json.dumps({"path": str(new_dir)}),
+        )
     assert "400" in str(exc_info.value)
 
 
-async def test_init_outside_server_root_returns_403(jp_fetch, tmp_path):
-    new_dir = tmp_path / "outside"
-    new_dir.mkdir()
-    other_root = tmp_path.parent / "otherroot"
-    other_root.mkdir(exist_ok=True)
-    with patch("jupyterhub_wikilab.routes._SERVER_ROOT", str(other_root)):
-        with pytest.raises(Exception) as exc_info:
-            await jp_fetch(
-                "wikilab", "api", "init",
-                method="POST",
-                body=json.dumps({"path": str(new_dir), "name": "Bad"}),
-            )
-    assert "403" in str(exc_info.value)
+async def test_init_relative_path_returns_400(jp_fetch):
+    """init rejects relative (non-absolute) paths."""
+    with pytest.raises(Exception) as exc_info:
+        await jp_fetch(
+            "wikilab", "api", "init",
+            method="POST",
+            body=json.dumps({"path": "relative/path", "name": "Bad"}),
+        )
+    assert "400" in str(exc_info.value)

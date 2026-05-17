@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -37,10 +36,6 @@ from jupyterhub_wikilab.git_service import (
 # correctly serialize concurrent writes.
 _wiki_locks: Dict[str, asyncio.Lock] = {}
 
-# Server root — set once in setup_route_handlers() and used for path validation.
-_SERVER_ROOT: str = ""
-
-
 def _get_wiki_lock(wiki_id: str) -> asyncio.Lock:
     """Get or create an asyncio lock for a given wiki, keyed by its path."""
     path = get_wiki_path(wiki_id)
@@ -50,14 +45,16 @@ def _get_wiki_lock(wiki_id: str) -> asyncio.Lock:
     return _wiki_locks[cache_key]
 
 
-def _is_under_server_root(abs_path: str) -> bool:
-    """Return True if abs_path is inside or equal to the server root."""
-    if not _SERVER_ROOT:
-        return False
+def _is_safe_path(raw_path: str) -> bool:
+    """Return True if raw_path is a non-empty absolute path.
+
+    OS-level permissions are the real security boundary; requiring the path
+    to be under a specific server root breaks JupyterHub deployments where
+    the user's notebook dir differs from the system home directory.
+    """
     try:
-        Path(abs_path).resolve().relative_to(Path(_SERVER_ROOT).resolve())
-        return True
-    except ValueError:
+        return bool(raw_path) and Path(raw_path).is_absolute()
+    except Exception:
         return False
 
 
@@ -76,10 +73,15 @@ class WikiProbeHandler(APIHandler):
             self.finish(json.dumps({"error": "Missing path parameter"}))
             return
 
+        if not _is_safe_path(raw_path):
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Path must be an absolute filesystem path"}))
+            return
+
         path = Path(raw_path).resolve()
-        if not _is_under_server_root(str(path)):
-            self.set_status(403)
-            self.finish(json.dumps({"error": "Path outside server root"}))
+        if not _is_safe_path(str(path)):
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Path must be an absolute filesystem path"}))
             return
 
         result = probe_wiki(path)
@@ -107,10 +109,15 @@ class WikiInitHandler(APIHandler):
             self.finish(json.dumps({"error": "Missing required fields: path, name"}))
             return
 
+        if not _is_safe_path(raw_path):
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Path must be an absolute filesystem path"}))
+            return
+
         path = Path(raw_path).resolve()
-        if not _is_under_server_root(str(path)):
-            self.set_status(403)
-            self.finish(json.dumps({"error": "Path outside server root"}))
+        if not _is_safe_path(str(path)):
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Path must be an absolute filesystem path"}))
             return
 
         try:
@@ -372,11 +379,6 @@ class WikiPageSearchHandler(APIHandler):
 
 def setup_route_handlers(web_app):
     """Setup all the route handlers for the wiki extension."""
-    global _SERVER_ROOT
-    _SERVER_ROOT = (
-        str(web_app.settings.get("root_dir", "")) or os.path.expanduser("~")
-    )
-
     base_url = web_app.settings.get("base_url", "/")
 
     # Discovery routes
