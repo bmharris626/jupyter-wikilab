@@ -13,7 +13,7 @@ import { IFileBrowserFactory } from '@jupyterlab/filebrowser';
 
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
-import { listWikis } from './wikiApi';
+import { probeWiki } from './wikiApi';
 
 import { WikiBrowser } from './components/WikiBrowser';
 import { WikiEditor } from './components/WikiEditor';
@@ -22,7 +22,7 @@ import { onDirtyChange } from './utils/dirtyState';
 
 import { IWikiBrowser, IWikiEditor } from './tokens';
 
-import { registerCommands, setReloadWikis } from './commands';
+import { registerCommands } from './commands';
 
 // Module-level reference so editorPlugin can access the most recently
 // opened editor (both plugins share this module scope).
@@ -43,42 +43,27 @@ export function getSettings(): ISettingRegistry.ISettings | null {
 
 // ── Plugin 1: Core activation + IWikiBrowser token ──────────────────────────
 
-/**
- * Initialization data for the jupyterhub-wikilab extension.
- *
- * Instantiates the sidebar and editor, registers the sidebar
- * in JupyterLab's left area, and opens a new editor tab in the
- * main area for each page selected. Provides the WikiBrowser token
- * for dependency injection.
- */
 const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
   id: 'jupyterhub-wikilab:plugin',
   description:
     'An extension for displaying and editing wikis within JupyterLab.',
   autoStart: true,
   provides: IWikiBrowser,
-  optional: [IFileBrowserFactory],
+  requires: [IFileBrowserFactory],
   activate: async (
     app: JupyterFrontEnd,
-    fileBrowserFactory: IFileBrowserFactory | null
+    fileBrowserFactory: IFileBrowserFactory
   ): Promise<IWikiBrowser> => {
     const serverSettings = app.serviceManager.serverSettings;
+
+    const serverRoot =
+      PageConfig.getOption('serverRoot') ||
+      PageConfig.getOption('rootDir') ||
+      '';
 
     // ── Register all commands ──────────────────────────────────────────────
 
     registerCommands(app);
-
-    // ── Register wiki-reload callback ──────────────────────────────────────
-
-    setReloadWikis(() => {
-      void listWikis(serverSettings)
-        .then(response => {
-          browser.populateWikis(response.wikis);
-        })
-        .catch(() => {
-          // Reload failed — keep current list
-        });
-    });
 
     // ── Sidebar container (left area) ──────────────────────────────────────
 
@@ -93,27 +78,6 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
 
     const browser = new WikiBrowser();
     browser.serverSettings = serverSettings;
-
-    // ── Default wiki path = current file browser directory ────────────
-    const serverRoot =
-      PageConfig.getOption('serverRoot') ||
-      PageConfig.getOption('rootDir') ||
-      '';
-    const currentRelPath =
-      fileBrowserFactory?.tracker.currentWidget?.model.path || '';
-    browser.defaultWikiPath = currentRelPath
-      ? `${serverRoot}/${currentRelPath}`
-      : serverRoot;
-
-    // ── Reload wikis after registration ───────────────────────────────────
-
-    browser.onWikiRegistered = () => {
-      void listWikis(serverSettings)
-        .then(response => {
-          browser.populateWikis(response.wikis);
-        })
-        .catch(() => {/* keep current list */});
-    };
 
     // ── Open editor tabs: "${wikiId}:${slug}" → { widget, editor } ────────
 
@@ -144,7 +108,6 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
         title: args.newTitle,
         mtime: new Date().toISOString()
       };
-      // Clear the saved SHA so the next save doesn't hit a stale-write error
       tab.editor.setPage(browser.activeWikiId, args.newSlug, undefined);
       editorTabs.delete(oldKey);
       editorTabs.set(`${browser.activeWikiId}:${args.newSlug}`, tab);
@@ -161,8 +124,6 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
         app.shell.activateById(existing.widget.id);
         return;
       }
-
-      // ── Create a new editor instance for this page ─────────────────────
 
       const editor = new WikiEditor();
       editor.serverSettings = serverSettings;
@@ -185,11 +146,7 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
       widget.title.iconClass = 'lm-FileIcon';
       widget.title.closable = true;
 
-      // ── Unsaved-changes guard ──────────────────────────────────────────
-
       editor.contentChanged.connect(() => onDirtyChange(editor));
-
-      // ── Conflict resolution flow ───────────────────────────────────────
 
       const editorSlug = args.slug;
       editor.conflictDetected.connect(async (_, conflictArgs) => {
@@ -226,8 +183,6 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
         app.shell.add(conflictView, 'main', { rank: 99 });
       });
 
-      // ── Remove from map when tab is closed ────────────────────────────
-
       widget.disposed.connect(() => {
         editorTabs.delete(tabKey);
       });
@@ -241,13 +196,43 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
 
     sidebarLayout.addWidget(browser);
 
-    // ── Populate wikis ─────────────────────────────────────────────────────
+    // ── Track file browser path changes → probe for wiki ──────────────────
 
-    try {
-      const response = await listWikis(serverSettings);
-      browser.populateWikis(response.wikis);
-    } catch {
-      browser.populateWikis({});
+    const trackPath = async (relativePath: string): Promise<void> => {
+      const absPath = serverRoot
+        ? `${serverRoot}/${relativePath}`.replace(/\/+/g, '/')
+        : relativePath;
+      browser.currentPath = absPath;
+      try {
+        const result = await probeWiki(absPath, serverSettings);
+        if (result.is_wiki && result.id && result.name && result.path) {
+          browser.setActiveWiki(result.id, result.name, result.path);
+        } else {
+          browser.clearWiki();
+        }
+      } catch {
+        browser.clearWiki();
+      }
+    };
+
+    const tracker = fileBrowserFactory.tracker;
+
+    tracker.currentChanged.connect((_, widget) => {
+      if (!widget) {
+        return;
+      }
+      void trackPath(widget.model.path);
+      widget.model.pathChanged.connect((_, args) => {
+        void trackPath(args.newValue);
+      });
+    });
+
+    // Probe the already-active directory on startup
+    if (tracker.currentWidget) {
+      void trackPath(tracker.currentWidget.model.path);
+    } else {
+      // No file browser open yet — show the "no wiki" placeholder
+      browser.clearWiki();
     }
 
     // ── Register sidebar in left area ──────────────────────────────────────
@@ -262,11 +247,6 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
 
 // ── Plugin 2: IWikiEditor token (requires main plugin) ─────────────────────
 
-/**
- * Second plugin that provides the IWikiEditor token.
- * Requires the main plugin so the editor instance is already
- * available in the same activation scope.
- */
 const editorPlugin: JupyterFrontEndPlugin<IWikiEditor> = {
   id: 'jupyterhub-wikilab:editor-plugin',
   description: 'Provides the WikiEditor service token.',
@@ -277,8 +257,6 @@ const editorPlugin: JupyterFrontEndPlugin<IWikiEditor> = {
     _app: JupyterFrontEnd,
     _browser: IWikiBrowser
   ): Promise<IWikiEditor> => {
-    // The editor was instantiated by the main plugin.
-    // Both plugins share this module scope so the reference is available.
     if (!_editorInstance) {
       throw new Error('WikiEditor instance not yet initialized');
     }
@@ -288,10 +266,6 @@ const editorPlugin: JupyterFrontEndPlugin<IWikiEditor> = {
 
 // ── Plugin 3: Settings integration ──────────────────────────────────────────
 
-/**
- * Third plugin that loads wikilab settings from the schema
- * and caches them for consumption by other components.
- */
 const settingsPlugin: JupyterFrontEndPlugin<void> = {
   id: 'jupyterhub-wikilab:settings-plugin',
   description: 'Loads and caches wikilab extension settings.',
@@ -308,7 +282,6 @@ const settingsPlugin: JupyterFrontEndPlugin<void> = {
         console.error('[wikilab] failed to load settings:', err);
       });
 
-    // Re-load whenever any plugin's settings change
     registry.pluginChanged.connect((_, pluginId) => {
       if (pluginId === 'jupyterhub-wikilab:plugin') {
         registry
@@ -327,7 +300,4 @@ const settingsPlugin: JupyterFrontEndPlugin<void> = {
 
 export { plugin, editorPlugin, settingsPlugin };
 
-// JupyterLab expects the frontend entrypoint to default-export either
-// a single plugin object or an array of plugin objects.
-// Export all three plugins as the default extension bundle.
 export default [plugin, editorPlugin, settingsPlugin];

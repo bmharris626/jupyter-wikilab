@@ -106,12 +106,6 @@ describe('registerCommands', () => {
     expect(meta?.label).toBe('Search Wiki Pages');
   });
 
-  it('registers the registerWiki command', () => {
-    const meta = registeredCommands.get(CommandIDs.registerWiki);
-    expect(meta).toBeDefined();
-    expect(meta?.label).toBe('Register New Wiki');
-  });
-
   it('registers the pushWiki command', () => {
     const meta = registeredCommands.get(CommandIDs.pushWiki);
     expect(meta).toBeDefined();
@@ -138,7 +132,6 @@ describe('registerCommands', () => {
       CommandIDs.renamePage,
       CommandIDs.openHistory,
       CommandIDs.openSearch,
-      CommandIDs.registerWiki,
       CommandIDs.pushWiki,
       CommandIDs.pullWiki
     ];

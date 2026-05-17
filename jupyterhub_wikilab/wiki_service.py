@@ -2,13 +2,18 @@
 Wiki service utilities for managing wiki pages and operations.
 """
 
+import json
 import os
 import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from .wiki_registry import listwikis, addwiki, removewiki, validate_path_access
+MARKER_FILE = ".wikilab"
+
+# In-memory cache: wiki_id → absolute path string.
+# Populated by probe_wiki() and init_wiki(); used by get_wiki_path().
+_WIKI_CACHE: Dict[str, str] = {}
 
 
 class ConflictError(Exception):
@@ -31,129 +36,119 @@ class ConflictError(Exception):
 
 
 def slugify(title: str) -> str:
-    """
-    Convert a title to a URL-friendly slug.
-
-    Args:
-        title: The title to slugify
-
-    Returns:
-        A URL-friendly slug
-    """
-    # Convert to lowercase
+    """Convert a title to a URL-friendly slug."""
     slug = title.lower()
-    # Replace spaces and non-alphanumeric characters with hyphens
     slug = re.sub(r"[^a-z0-9]+", "-", slug)
-    # Remove leading/trailing hyphens
     slug = slug.strip("-")
     return slug
 
 
-def get_wiki_path(wiki_id: str) -> Optional[Path]:
-    """
-    Get the path for a registered wiki.
+def _get_server_root() -> str:
+    """Return the Jupyter server root directory."""
+    return (
+        os.environ.get("JUPYTER_SERVER_ROOT")
+        or os.environ.get("JUPYTERHUB_USER_DIR")
+        or os.path.expanduser("~")
+    )
 
-    Args:
-        wiki_id: The wiki ID
 
-    Returns:
-        Path to the wiki directory or None if not found
+def _read_marker(path: Path) -> Optional[dict]:
+    """Read and parse .wikilab JSON; return None on any error."""
+    try:
+        return json.loads((path / MARKER_FILE).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _fallback_scan(wiki_id: str) -> Optional[str]:
+    """Walk the server root looking for a .wikilab whose 'id' matches wiki_id.
+
+    Primes the cache on hit. Only called on a cache miss.
     """
-    wikis = listwikis()
-    if wiki_id in wikis:
-        return Path(wikis[wiki_id]["path"])
+    server_root = _get_server_root()
+    try:
+        for marker_path in Path(server_root).rglob(MARKER_FILE):
+            try:
+                data = json.loads(marker_path.read_text(encoding="utf-8"))
+                if data.get("id") == wiki_id:
+                    candidate = str(marker_path.parent)
+                    _WIKI_CACHE[wiki_id] = candidate
+                    return candidate
+            except Exception:
+                continue
+    except Exception:
+        pass
     return None
+
+
+def _ensure_gitignore(path: Path) -> None:
+    """Append .wikilab to .gitignore if not already present."""
+    gi = path / ".gitignore"
+    existing = gi.read_text(encoding="utf-8") if gi.exists() else ""
+    if MARKER_FILE not in existing:
+        with gi.open("a", encoding="utf-8") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            f.write(f"{MARKER_FILE}\n")
+
+
+def probe_wiki(path: Path) -> Optional[dict]:
+    """Check path for .wikilab + .git; if found prime the cache and return wiki info."""
+    marker = _read_marker(path)
+    if not marker:
+        return None
+    if not (path / ".git").exists():
+        return None
+    wiki_id = marker.get("id")
+    name = marker.get("name", wiki_id)
+    if not wiki_id:
+        return None
+    _WIKI_CACHE[wiki_id] = str(path)
+    return {"id": wiki_id, "name": name, "path": str(path)}
+
+
+def init_wiki(path: Path, name: str) -> dict:
+    """Create .wikilab, ensure git repo exists, update .gitignore, prime cache."""
+    import uuid
+    from .git_service import detect_or_init_repo
+
+    if not path.is_dir():
+        raise ValueError(f"Not a directory: {path}")
+    wiki_id = str(uuid.uuid4())
+    marker = {"id": wiki_id, "name": name}
+    (path / MARKER_FILE).write_text(json.dumps(marker, indent=2), encoding="utf-8")
+    detect_or_init_repo(str(path), init_if_missing=True)
+    _ensure_gitignore(path)
+    _WIKI_CACHE[wiki_id] = str(path)
+    return {"id": wiki_id, "name": name, "path": str(path)}
+
+
+def get_wiki_path(wiki_id: str) -> Optional[Path]:
+    """Get the path for a wiki by its ID (cache → fallback scan)."""
+    path_str = _WIKI_CACHE.get(wiki_id)
+    if path_str is None:
+        path_str = _fallback_scan(wiki_id)
+    return Path(path_str) if path_str else None
 
 
 def get_wiki_config(wiki_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Get the configuration for a registered wiki.
-
-    Args:
-        wiki_id: The wiki ID
-
-    Returns:
-        Wiki configuration or None if not found
-    """
-    wikis = listwikis()
-    if wiki_id in wikis:
-        return wikis[wiki_id]
-    return None
-
-
-def create_wiki(wiki_id: str, name: str, path: str) -> bool:
-    """
-    Register a new wiki.
-
-    Args:
-        wiki_id: Unique identifier for the wiki
-        name: Human-readable name for the wiki
-        path: Filesystem path to the wiki
-
-    Returns:
-        True if registration was successful, False otherwise
-    """
-    # Validate path access
-    path_obj = Path(path)
-    if not validate_path_access(path_obj):
-        return False
-
-    # Create wiki config
-    wiki_config = {"id": wiki_id, "name": name, "path": str(path_obj)}
-
-    # Add to registry
-    addwiki(wiki_id, wiki_config)
-    return True
-
-
-def remove_wiki(wiki_id: str) -> bool:
-    """
-    Remove a wiki from registration.
-
-    Args:
-        wiki_id: The wiki ID to remove
-
-    Returns:
-        True if removed successfully, False otherwise
-    """
-    return removewiki(wiki_id)
-
-
-def list_wikis() -> Dict[str, Any]:
-    """
-    List all registered wikis.
-
-    Returns:
-        Dictionary of registered wikis
-    """
-    return listwikis()
+    """Get name and path for a wiki by reading its marker file."""
+    path = get_wiki_path(wiki_id)
+    if path is None:
+        return None
+    marker = _read_marker(path)
+    if not marker:
+        return None
+    return {"id": wiki_id, "name": marker.get("name", wiki_id), "path": str(path)}
 
 
 def get_page_path(wiki_path: Path, slug: str) -> Path:
-    """
-    Get the filesystem path for a page in a wiki.
-
-    Args:
-        wiki_path: Path to the wiki directory
-        slug: Page slug
-
-    Returns:
-        Path to the page file
-    """
+    """Get the filesystem path for a page in a wiki."""
     return wiki_path / f"{slug}.md"
 
 
 def list_pages(wiki_id: str) -> List[Dict[str, Any]]:
-    """
-    List all pages in a wiki, including pages inside subdirectories.
-
-    Args:
-        wiki_id: The wiki ID
-
-    Returns:
-        List of page metadata; slugs use forward-slash separators for nested pages
-        (e.g. ``"guides/setup"`` for ``wiki_path/guides/setup.md``).
-    """
+    """List all pages in a wiki, including pages inside subdirectories."""
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
         return []
@@ -162,12 +157,10 @@ def list_pages(wiki_id: str) -> List[Dict[str, Any]]:
     for md_file in sorted(wiki_path.rglob("*.md")):
         if md_file.name == "_sidebar.md":
             continue
-        # Skip files inside hidden directories (e.g. .ipynb_checkpoints)
         rel = md_file.relative_to(wiki_path)
         if any(part.startswith(".") for part in rel.parts[:-1]):
             continue
 
-        # Always use forward slashes regardless of OS
         slug = str(rel).replace("\\", "/")[: -len(".md")]
         title = md_file.stem.replace("-", " ").title()
         mtime = datetime.fromtimestamp(md_file.stat().st_mtime)
@@ -179,16 +172,7 @@ def list_pages(wiki_id: str) -> List[Dict[str, Any]]:
 
 
 def get_page_content(wiki_id: str, slug: str) -> Optional[str]:
-    """
-    Get the content of a page.
-
-    Args:
-        wiki_id: The wiki ID
-        slug: Page slug
-
-    Returns:
-        Page content or None if not found
-    """
+    """Get the content of a page."""
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
         return None
@@ -205,16 +189,7 @@ def get_page_content(wiki_id: str, slug: str) -> Optional[str]:
 
 
 def get_page_with_sha(wiki_id: str, slug: str) -> Optional[dict]:
-    """
-    Get page content and its current git commit SHA.
-
-    Args:
-        wiki_id: The wiki ID
-        slug: Page slug
-
-    Returns:
-        Dict with 'content' and 'sha' keys, or None if page not found.
-    """
+    """Get page content and its current git commit SHA."""
     from .git_service import get_page_sha
 
     wiki_path = get_wiki_path(wiki_id)
@@ -232,7 +207,6 @@ def get_page_with_sha(wiki_id: str, slug: str) -> Optional[dict]:
         return None
 
     sha = get_page_sha(wiki_id, slug)
-
     return {"content": content, "sha": sha}
 
 
@@ -243,37 +217,18 @@ def save_page(
     head_sha: Optional[str] = None,
     user: Optional[str] = None,
 ) -> bool:
-    """
-    Save a page to a wiki and auto-commit the change.
-
-    Args:
-        wiki_id: The wiki ID
-        slug: Page slug
-        content: Page content
-        head_sha: Expected head SHA for conflict detection
-        user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
-
-    Returns:
-        True if save and commit were successful, False if head_sha did not match
-        or commit failed.
-
-    Raises:
-        ConflictError: If head_sha was provided but did not match current HEAD
-    """
+    """Save a page to a wiki and auto-commit the change."""
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
         return False
 
-    # Conflict detection: verify head_sha matches current HEAD if provided
     if head_sha:
         from .git_service import get_page_content_at_sha, get_page_sha
 
         current_sha = get_page_sha(wiki_id, slug)
         if current_sha and current_sha != head_sha:
-            # Read base content (from the commit the user started editing)
             page_name = slug if slug.endswith(".md") else f"{slug}.md"
             base_content = get_page_content_at_sha(str(wiki_path), page_name, head_sha)
-            # Read their content (current on-disk content)
             their_content = get_page_content(wiki_id, slug)
             raise ConflictError(
                 f"Stale write detected: expected SHA {head_sha}, "
@@ -285,16 +240,12 @@ def save_page(
     page_path = get_page_path(wiki_path, slug)
 
     try:
-        # Create directory if needed
         page_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Write content
         with open(page_path, "w", encoding="utf-8") as f:
             f.write(content)
     except Exception:
         return False
 
-    # Auto-commit the change (Gap 1 + Gap 2)
     from .git_service import commit_wiki_page, get_default_email
 
     email = get_default_email(user)
@@ -308,22 +259,7 @@ def create_page(
     user: Optional[str] = None,
     folder: Optional[str] = None,
 ) -> Optional[str]:
-    """
-    Create a new page in a wiki and auto-commit it to git.
-
-    Args:
-        wiki_id: The wiki ID
-        title: Page title
-        content: Page content
-        user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
-        folder: Optional relative folder path (e.g. ``"guides"`` or
-                ``"guides/tutorials"``).  The page is created inside this
-                subdirectory.  Forward slashes only; must not start or end
-                with a slash.
-
-    Returns:
-        Slug of created page or None if failed
-    """
+    """Create a new page in a wiki and auto-commit it to git."""
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
         return None
@@ -355,17 +291,7 @@ def delete_page(
     slug: str,
     user: Optional[str] = None,
 ) -> bool:
-    """
-    Delete a page from a wiki, stage the removal in git, and commit.
-
-    Args:
-        wiki_id: The wiki ID
-        slug: Page slug
-        user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
-
-    Returns:
-        True if deletion and commit were successful, False otherwise
-    """
+    """Delete a page from a wiki, stage the removal in git, and commit."""
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
         return False
@@ -407,23 +333,11 @@ def delete_page(
 def rename_page(
     wiki_id: str, slug: str, new_title: str, user: Optional[str] = None
 ) -> bool:
-    """
-    Rename a page in a wiki using ``git mv`` semantics and commit the change.
-
-    Args:
-        wiki_id: The wiki ID
-        slug: Current page slug
-        new_title: New page title
-        user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
-
-    Returns:
-        True if rename and commit were successful, False otherwise
-    """
+    """Rename a page in a wiki using git mv semantics and commit the change."""
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
         return False
 
-    # Preserve folder prefix: only the filename component is re-slugified.
     name_slug = slugify(new_title)
     if "/" in slug:
         folder_prefix = slug.rsplit("/", 1)[0]
@@ -434,7 +348,6 @@ def rename_page(
     old_page = f"{slug}.md"
     new_page = f"{new_slug}.md"
 
-    # Use git service for rename with git mv + commit
     from .git_service import rename_wiki_page
 
     return rename_wiki_page(wiki_id, old_page, new_page, user=user)

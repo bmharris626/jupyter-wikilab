@@ -38,11 +38,11 @@ import {
   createPage,
   renamePage,
   savePage,
-  searchWiki
+  searchWiki,
+  initWiki
 } from '../wikiApi';
-import { openRegisterWikiDialog } from '../commands';
 import { SearchPanel } from './SearchPanel';
-import type { WikiInfo, PageEntry, GitStatusResponse } from '../types';
+import type { PageEntry, GitStatusResponse } from '../types';
 
 // ── CSS class namespace ─────────────────────────────────────────────────────
 
@@ -145,7 +145,7 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   // ── IBrowserPanel ──────────────────────────────────────────────────────
 
   get activeWikiId(): string {
-    return this._wikiSelect.value;
+    return this._activeWikiId;
   }
 
   get pages(): PageEntry[] {
@@ -166,7 +166,7 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     if (!wikiId) {
       this._pages = [];
       this._clearPageList();
-      this._showPlaceholder('Select a wiki to browse its pages.');
+      this._showPlaceholder('Navigate to a folder containing a wiki, or initialize one here.');
       return;
     }
 
@@ -268,30 +268,19 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   set serverSettings(settings: ServerConnection.ISettings) {
     this._serverSettings = settings;
     this._searchPanel.serverSettings = settings;
-    // Wire the + button now that we have server settings
-    this._registerBtn.onclick = () => {
-      if (!this._serverSettings) {
-        return;
-      }
-      void openRegisterWikiDialog(
-        this._serverSettings,
-        () => {
-          if (this.onWikiRegistered) {
-            this.onWikiRegistered();
-          }
-        },
-        this._defaultWikiPath
-      );
+    this._initWikiBtn.onclick = () => {
+      void this._handleInitWiki();
     };
   }
 
-  /** Default filesystem path pre-populated in the new-wiki dialog. */
-  set defaultWikiPath(path: string) {
-    this._defaultWikiPath = path;
+  /** Absolute filesystem path of the current file browser directory. */
+  set currentPath(path: string) {
+    this._currentPath = path;
   }
 
   private _serverSettings: ServerConnection.ISettings | null = null;
-  private _defaultWikiPath: string = '';
+  private _currentPath: string = '';
+  private _activeWikiId: string = '';
   private _pages: PageEntry[] = [];
   /** Most recently loaded page content (set by loadPage). */
   _lastLoadedContent: string = '';
@@ -301,7 +290,8 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   // ── DOM construction ───────────────────────────────────────────────────
 
   private _toolbar!: Panel;
-  _wikiSelect!: HTMLSelectElement; // internal — accessible to tests
+  private _wikiNameDisplay!: HTMLSpanElement;
+  private _initWikiBtn!: HTMLButtonElement;
   private _pagePanel!: Panel;
   private _pageList!: HTMLUListElement;
   private _placeholder!: HTMLDivElement;
@@ -329,59 +319,35 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   private _gitStatusEl!: HTMLDivElement;
   private _pullBtn!: HTMLButtonElement;
   private _pushBtn!: HTMLButtonElement;
-  private _registerBtn!: HTMLButtonElement;
-
-  /** Optional callback invoked after a wiki is successfully registered. */
-  onWikiRegistered: (() => void) | null = null;
-
-  private _onWikiChange = (): void => {
-    const prev = this.wikiSelected.newValue;
-    this.wikiSelected.oldValue = prev;
-    this.wikiSelected.newValue = this.activeWikiId;
-
-    this._newPageBtn.disabled = !this.activeWikiId;
-    this._searchPanel.setWikiId(this.activeWikiId);
-    this._searchPanel.clear();
-
-    if (prev !== this.activeWikiId) {
-      void Promise.all([this.loadPages(), this.refreshGitStatus()]);
-    }
-  };
 
   private _createToolbar(): void {
     this._toolbar = new Panel();
     this._toolbar.addClass(`${CSS_PREFIX}-toolbar`);
 
-    // ── Row 1: wiki selector ───────────────────────────────────────────────
+    // ── Row 1: active wiki name + init button ──────────────────────────────
 
     const wikiRow = document.createElement('div');
     wikiRow.className = `${CSS_PREFIX}-toolbarRow`;
 
-    const label = document.createElement('label');
-    label.textContent = 'Wiki';
+    const label = document.createElement('span');
+    label.textContent = 'Wiki: ';
     label.className = `${CSS_PREFIX}-wikiLabel`;
 
-    this._wikiSelect = document.createElement('select');
-    this._wikiSelect.className = `${CSS_PREFIX}-wikiSelect`;
-    this._wikiSelect.setAttribute('aria-label', 'Select a wiki');
+    this._wikiNameDisplay = document.createElement('span');
+    this._wikiNameDisplay.className = `${CSS_PREFIX}-wikiName`;
+    this._wikiNameDisplay.textContent = '—';
 
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = '— none —';
-    this._wikiSelect.appendChild(defaultOption);
-
-    this._wikiSelect.addEventListener('change', this._onWikiChange);
-
-    // Register-wiki button — onclick wired later in set serverSettings()
-    this._registerBtn = document.createElement('button');
-    this._registerBtn.className = `${CSS_PREFIX}-iconBtn`;
-    this._registerBtn.textContent = '+';
-    this._registerBtn.setAttribute('aria-label', 'Register new wiki');
-    this._registerBtn.setAttribute('title', 'Register new wiki');
+    // Init-wiki button — onclick wired in set serverSettings()
+    this._initWikiBtn = document.createElement('button');
+    this._initWikiBtn.className = `${CSS_PREFIX}-iconBtn`;
+    this._initWikiBtn.textContent = '+ Init Wiki Here';
+    this._initWikiBtn.setAttribute('aria-label', 'Initialize wiki in current directory');
+    this._initWikiBtn.setAttribute('title', 'Initialize wiki in current directory');
+    this._initWikiBtn.style.display = 'none'; // shown only when no wiki is active
 
     wikiRow.appendChild(label);
-    wikiRow.appendChild(this._wikiSelect);
-    wikiRow.appendChild(this._registerBtn);
+    wikiRow.appendChild(this._wikiNameDisplay);
+    wikiRow.appendChild(this._initWikiBtn);
 
     // ── Row 2: git status + actions ───────────────────────────────────────
 
@@ -413,30 +379,30 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._toolbar.node.appendChild(gitRow);
   }
 
-  /** Populate the wiki selector dropdown from the registry. */
-  populateWikis(wikis: Record<string, WikiInfo>): void {
-    const select = this._wikiSelect;
+  /** Activate a wiki for the current directory and load its pages. */
+  setActiveWiki(wikiId: string, name: string, path: string): void {
+    this._activeWikiId = wikiId;
+    this._currentPath = path;
+    this._wikiNameDisplay.textContent = name;
+    this._initWikiBtn.style.display = 'none';
+    this._newPageBtn.disabled = false;
+    this._searchPanel.setWikiId(wikiId);
+    this._searchPanel.clear();
+    void Promise.all([this.loadPages(), this.refreshGitStatus()]);
+  }
 
-    // Save current selection before removing options (removal resets value to "")
-    const current = select.value;
-
-    // Remove all options except the first (default)
-    while (select.options.length > 1) {
-      select.remove(1);
-    }
-
-    for (const [id, info] of Object.entries(wikis)) {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = info.name;
-      select.appendChild(opt);
-    }
-
-    // Restore previous selection if it still exists
-    const options = Array.from(select.options);
-    if (current && options.some(o => o.value === current && o.value !== '')) {
-      select.value = current;
-    }
+  /** Clear the active wiki (current directory has no wiki). */
+  clearWiki(): void {
+    this._activeWikiId = '';
+    this._wikiNameDisplay.textContent = '—';
+    this._initWikiBtn.style.display = '';
+    this._newPageBtn.disabled = true;
+    this._searchPanel.setWikiId('');
+    this._searchPanel.clear();
+    this._pages = [];
+    this._clearPageList();
+    this._showPlaceholder('Navigate to a folder containing a wiki, or initialize one here.');
+    void this.refreshGitStatus();
   }
 
   private _createPageList(): void {
@@ -791,6 +757,31 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     } else {
       this._pullBtn.textContent = '↻ Pull';
       this._pushBtn.textContent = '↑ Push';
+    }
+  }
+
+  private async _handleInitWiki(): Promise<void> {
+    if (!this._serverSettings || !this._currentPath) {
+      return;
+    }
+    const result = await InputDialog.getText({
+      title: 'Initialize Wiki',
+      label: 'Wiki name',
+      okLabel: 'Initialize'
+    });
+    if (!result.button.accept || !result.value?.trim()) {
+      return;
+    }
+    const name = result.value.trim();
+    try {
+      const info = await initWiki(
+        { path: this._currentPath, name },
+        this._serverSettings
+      );
+      this.setActiveWiki(info.id, info.name, info.path);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this._showPlaceholder(`Failed to initialize wiki: ${message}`);
     }
   }
 

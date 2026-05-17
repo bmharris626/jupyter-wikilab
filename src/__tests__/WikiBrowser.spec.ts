@@ -1,12 +1,9 @@
 /**
  * Unit tests for the WikiBrowser sidebar panel.
- *
- * Tests cover construction, wiki population, page loading, and placeholder
- * rendering using a headless JSDOM environment.
  */
 
 import { WikiBrowser } from '../components/WikiBrowser';
-import type { WikiInfo, PageEntry } from '../types';
+import type { PageEntry } from '../types';
 
 // ── Mock the API layer ──────────────────────────────────────────────────────
 
@@ -16,7 +13,8 @@ jest.mock('../wikiApi', () => ({
   gitPull: jest.fn(),
   gitPush: jest.fn(),
   getBacklinks: jest.fn(),
-  getPage: jest.fn()
+  getPage: jest.fn(),
+  initWiki: jest.fn()
 }));
 
 import {
@@ -28,7 +26,6 @@ import {
   getPage
 } from '../wikiApi';
 
-// Minimal server settings object for API calls.
 const mockServerSettings: any = {
   baseUrl: 'http://localhost:8888/',
   token: '',
@@ -39,7 +36,6 @@ describe('WikiBrowser', () => {
   let browser: WikiBrowser;
 
   beforeEach(() => {
-    // Ensure a clean DOM for each test.
     document.body.innerHTML = '';
     browser = new WikiBrowser();
     browser.serverSettings = mockServerSettings;
@@ -59,7 +55,7 @@ describe('WikiBrowser', () => {
     expect(browser.widgets.length).toBe(4);
   });
 
-  it('should start with an empty active wiki selection', () => {
+  it('should start with an empty active wiki id', () => {
     expect(browser.activeWikiId).toBe('');
   });
 
@@ -67,52 +63,83 @@ describe('WikiBrowser', () => {
     expect(browser.pages.length).toBe(0);
   });
 
-  // ── Wiki population ────────────────────────────────────────────────────
+  // ── setActiveWiki / clearWiki ──────────────────────────────────────────
 
-  it('should populate the dropdown with wikis', () => {
-    const wikis: Record<string, WikiInfo> = {
-      notes: { id: 'notes', name: 'My Notes', path: '/tmp/notes' },
-      team: { id: 'team', name: 'Team Wiki', path: '/tmp/team' }
-    };
-
-    browser.populateWikis(wikis);
-
-    const options = Array.from(browser._wikiSelect.options);
-    expect(options).toHaveLength(3); // default + 2 wikis
-    expect(options[1].value).toBe('notes');
-    expect(options[1].textContent).toBe('My Notes');
-    expect(options[2].value).toBe('team');
-    expect(options[2].textContent).toBe('Team Wiki');
+  it('should set activeWikiId after setActiveWiki', () => {
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
+    });
+    browser.setActiveWiki('test-id', 'Test Wiki', '/tmp/test');
+    expect(browser.activeWikiId).toBe('test-id');
   });
 
-  it('should restore the previous selection after repopulation', () => {
-    const wikis1: Record<string, WikiInfo> = {
-      a: { id: 'a', name: 'Wiki A', path: '/tmp/a' },
-      b: { id: 'b', name: 'Wiki B', path: '/tmp/b' }
-    };
+  it('should display wiki name after setActiveWiki', () => {
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
+    });
+    browser.setActiveWiki('w1', 'My Wiki', '/tmp/w1');
+    const nameEl = browser.node.querySelector('.jp-WikiBrowser-wikiName');
+    expect(nameEl?.textContent).toBe('My Wiki');
+  });
 
-    browser.populateWikis(wikis1);
-    browser._wikiSelect.value = 'b';
-    expect(browser.activeWikiId).toBe('b');
+  it('should hide init button after setActiveWiki', () => {
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
+    });
+    browser.setActiveWiki('w1', 'My Wiki', '/tmp/w1');
+    const initBtn = browser.node.querySelector(
+      '[aria-label="Initialize wiki in current directory"]'
+    ) as HTMLButtonElement | null;
+    expect(initBtn?.style.display).toBe('none');
+  });
 
-    const wikis2: Record<string, WikiInfo> = {
-      b: { id: 'b', name: 'Wiki B', path: '/tmp/b' },
-      c: { id: 'c', name: 'Wiki C', path: '/tmp/c' }
-    };
+  it('should enable new-page button after setActiveWiki', () => {
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
+    });
+    browser.setActiveWiki('w1', 'My Wiki', '/tmp/w1');
+    const newBtn = browser.node.querySelector(
+      '[aria-label="New page"]'
+    ) as HTMLButtonElement | null;
+    expect(newBtn?.disabled).toBe(false);
+  });
 
-    browser.populateWikis(wikis2);
-    // Selection should still be 'b'
-    expect(browser.activeWikiId).toBe('b');
+  it('should clear activeWikiId after clearWiki', () => {
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
+    });
+    browser.setActiveWiki('w1', 'My Wiki', '/tmp/w1');
+    browser.clearWiki();
+    expect(browser.activeWikiId).toBe('');
+  });
+
+  it('should show init button after clearWiki', () => {
+    browser.clearWiki();
+    const initBtn = browser.node.querySelector(
+      '[aria-label="Initialize wiki in current directory"]'
+    ) as HTMLButtonElement | null;
+    expect(initBtn?.style.display).not.toBe('none');
+  });
+
+  it('should disable new-page button after clearWiki', () => {
+    browser.clearWiki();
+    const newBtn = browser.node.querySelector(
+      '[aria-label="New page"]'
+    ) as HTMLButtonElement | null;
+    expect(newBtn?.disabled).toBe(true);
   });
 
   // ── Page loading ───────────────────────────────────────────────────────
 
   it('should show a placeholder when no wiki is selected', async () => {
     await browser.loadPages();
-    const placeholder = browser.node.querySelector(
-      '.jp-WikiBrowser-placeholder'
-    );
-    expect(placeholder?.textContent).toBe('Select a wiki to browse its pages.');
+    const placeholder = browser.node.querySelector('.jp-WikiBrowser-placeholder');
+    expect(placeholder?.textContent).toContain('Navigate to a folder');
   });
 
   it('should load and render pages for a selected wiki', async () => {
@@ -123,15 +150,15 @@ describe('WikiBrowser', () => {
     ];
 
     (listPages as jest.Mock).mockResolvedValueOnce({ pages: mockPages });
-
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
     });
-    browser._wikiSelect.value = 'test';
-    await browser.loadPages();
+
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    // setActiveWiki calls loadPages internally — wait for it
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(browser.pages).toHaveLength(3);
-
     const links = browser.node.querySelectorAll('.jp-WikiBrowser-pageLink');
     expect(links).toHaveLength(3);
     expect(links[0].textContent).toBe('Home');
@@ -140,35 +167,29 @@ describe('WikiBrowser', () => {
   });
 
   it('should handle API errors gracefully', async () => {
-    (listPages as jest.Mock).mockRejectedValueOnce(
-      new Error('Connection refused')
-    );
-
-    browser.populateWikis({
-      fail: { id: 'fail', name: 'Fail', path: '/tmp/fail' }
+    (listPages as jest.Mock).mockRejectedValueOnce(new Error('Connection refused'));
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
     });
-    browser._wikiSelect.value = 'fail';
-    await browser.loadPages();
 
-    const placeholder = browser.node.querySelector(
-      '.jp-WikiBrowser-placeholder'
-    );
+    browser.setActiveWiki('fail', 'Fail', '/tmp/fail');
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const placeholder = browser.node.querySelector('.jp-WikiBrowser-placeholder');
     expect(placeholder?.textContent).toContain('Failed to load pages');
     expect(browser.pages).toHaveLength(0);
   });
 
   it('should show a no-pages message for empty wiki', async () => {
     (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
-
-    browser.populateWikis({
-      empty: { id: 'empty', name: 'Empty', path: '/tmp/empty' }
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
     });
-    browser._wikiSelect.value = 'empty';
-    await browser.loadPages();
 
-    const placeholder = browser.node.querySelector(
-      '.jp-WikiBrowser-placeholder'
-    );
+    browser.setActiveWiki('empty', 'Empty', '/tmp/empty');
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const placeholder = browser.node.querySelector('.jp-WikiBrowser-placeholder');
     expect(placeholder?.textContent).toBe('No pages in this wiki.');
   });
 
@@ -177,9 +198,7 @@ describe('WikiBrowser', () => {
   it('should carry the correct values in the wikiSelected signal', () => {
     browser.wikiSelected.oldValue = '';
     browser.wikiSelected.newValue = '';
-
     browser._emitWikiSelected('notes');
-
     expect(browser.wikiSelected.oldValue).toBe('');
     expect(browser.wikiSelected.newValue).toBe('notes');
   });
@@ -193,37 +212,27 @@ describe('WikiBrowser', () => {
 
   it('should have pull and push buttons in the toolbar', () => {
     const pullBtn = browser.node.querySelector('.jp-WikiBrowser-gitBtn');
-    const pushBtn = browser.node.querySelectorAll('.jp-WikiBrowser-gitBtn');
+    const pushBtns = browser.node.querySelectorAll('.jp-WikiBrowser-gitBtn');
     expect(pullBtn).toBeTruthy();
-    expect(pushBtn).toHaveLength(2);
+    expect(pushBtns).toHaveLength(2);
   });
 
   it('should show disabled buttons when no wiki is selected', async () => {
     await browser.refreshGitStatus();
-    const pullBtn = browser.node.querySelector(
-      '.jp-WikiBrowser-gitBtn'
-    ) as HTMLButtonElement;
-    const pushBtn = browser.node.querySelectorAll(
-      '.jp-WikiBrowser-gitBtn'
-    )[1] as HTMLButtonElement;
+    const pullBtn = browser.node.querySelector('.jp-WikiBrowser-gitBtn') as HTMLButtonElement;
+    const pushBtn = browser.node.querySelectorAll('.jp-WikiBrowser-gitBtn')[1] as HTMLButtonElement;
     expect(pullBtn.disabled).toBe(true);
     expect(pushBtn.disabled).toBe(true);
   });
 
   it('should display branch and ahead/behind after successful git status fetch', async () => {
     (getGitStatus as jest.Mock).mockResolvedValueOnce({
-      branch: 'main',
-      ahead: 3,
-      behind: 1,
-      dirty: false,
-      untracked: 0
+      branch: 'main', ahead: 3, behind: 1, dirty: false, untracked: 0
     });
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
 
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
-    });
-    browser._wikiSelect.value = 'test';
-    await browser.refreshGitStatus();
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
     expect(gitStatusEl?.textContent).toContain('main');
@@ -233,18 +242,12 @@ describe('WikiBrowser', () => {
 
   it('should display dirty indicator when repo is dirty', async () => {
     (getGitStatus as jest.Mock).mockResolvedValueOnce({
-      branch: 'develop',
-      ahead: 0,
-      behind: 0,
-      dirty: true,
-      untracked: 2
+      branch: 'develop', ahead: 0, behind: 0, dirty: true, untracked: 2
     });
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
 
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
-    });
-    browser._wikiSelect.value = 'test';
-    await browser.refreshGitStatus();
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
     expect(gitStatusEl?.textContent).toContain('develop');
@@ -253,21 +256,16 @@ describe('WikiBrowser', () => {
 
   it('should clear git status when no wiki is selected', async () => {
     await browser.refreshGitStatus();
-
     const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
     expect(gitStatusEl?.textContent).toBe('—');
   });
 
   it('should handle git status API error gracefully', async () => {
-    (getGitStatus as jest.Mock).mockRejectedValueOnce(
-      new Error('Network error')
-    );
+    (getGitStatus as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
 
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
-    });
-    browser._wikiSelect.value = 'test';
-    await browser.refreshGitStatus();
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     const gitStatusEl = browser.node.querySelector('.jp-WikiBrowser-gitStatus');
     expect(gitStatusEl?.textContent).toBe('error');
@@ -277,29 +275,17 @@ describe('WikiBrowser', () => {
 
   it('should call gitPull when pull button is clicked', async () => {
     (getGitStatus as jest.Mock).mockResolvedValueOnce({
-      branch: 'main',
-      ahead: 0,
-      behind: 0,
-      dirty: false,
-      untracked: 0
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
     });
-    (gitPull as jest.Mock).mockResolvedValueOnce({
-      message: 'Git pull successful'
-    });
+    (gitPull as jest.Mock).mockResolvedValueOnce({ message: 'Git pull successful' });
     (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
 
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
-    });
-    browser._wikiSelect.value = 'test';
-    await browser.refreshGitStatus();
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    await new Promise(resolve => setTimeout(resolve, 50));
 
-    const pullBtn = browser.node.querySelector(
-      '.jp-WikiBrowser-gitBtn'
-    ) as HTMLButtonElement;
+    const pullBtn = browser.node.querySelector('.jp-WikiBrowser-gitBtn') as HTMLButtonElement;
     expect(pullBtn.disabled).toBe(false);
     pullBtn.click();
-
     await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(gitPull).toHaveBeenCalledWith('test', mockServerSettings);
@@ -309,28 +295,17 @@ describe('WikiBrowser', () => {
 
   it('should call gitPush when push button is clicked', async () => {
     (getGitStatus as jest.Mock).mockResolvedValueOnce({
-      branch: 'main',
-      ahead: 0,
-      behind: 0,
-      dirty: false,
-      untracked: 0
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
     });
-    (gitPush as jest.Mock).mockResolvedValueOnce({
-      message: 'Git push successful'
-    });
+    (gitPush as jest.Mock).mockResolvedValueOnce({ message: 'Git push successful' });
+    (listPages as jest.Mock).mockResolvedValueOnce({ pages: [] });
 
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
-    });
-    browser._wikiSelect.value = 'test';
-    await browser.refreshGitStatus();
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    await new Promise(resolve => setTimeout(resolve, 50));
 
-    const pushBtn = browser.node.querySelectorAll(
-      '.jp-WikiBrowser-gitBtn'
-    )[1] as HTMLButtonElement;
+    const pushBtn = browser.node.querySelectorAll('.jp-WikiBrowser-gitBtn')[1] as HTMLButtonElement;
     expect(pushBtn.disabled).toBe(false);
     pushBtn.click();
-
     await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(gitPush).toHaveBeenCalledWith('test', mockServerSettings);
@@ -353,29 +328,18 @@ describe('WikiBrowser', () => {
     (listPages as jest.Mock).mockResolvedValueOnce({
       pages: [{ slug: 'home', title: 'Home', mtime: '2024-01-01' }]
     });
-    (getPage as jest.Mock).mockResolvedValueOnce({
-      content: '# Home',
-      head_sha: 'abc123'
-    });
-    (getBacklinks as jest.Mock).mockResolvedValueOnce({
-      backlinks: ['about.md', 'contact.md']
+    (getPage as jest.Mock).mockResolvedValueOnce({ content: '# Home', head_sha: 'abc123' });
+    (getBacklinks as jest.Mock).mockResolvedValueOnce({ backlinks: ['about.md', 'contact.md'] });
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
     });
 
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
-    });
-    browser._wikiSelect.value = 'test';
-    await browser.loadPages();
-
-    // Load a page, which triggers backlinks loading
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    await new Promise(resolve => setTimeout(resolve, 50));
     await browser.loadPage('home');
-
-    // Wait for the async backlinks to load
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    const backlinks = browser.node.querySelectorAll(
-      '.jp-WikiBrowser-backlinkLink'
-    );
+    const backlinks = browser.node.querySelectorAll('.jp-WikiBrowser-backlinkLink');
     expect(backlinks).toHaveLength(2);
     expect(backlinks[0].textContent).toBe('about.md');
     expect(backlinks[1].textContent).toBe('contact.md');
@@ -385,21 +349,17 @@ describe('WikiBrowser', () => {
     (listPages as jest.Mock).mockResolvedValueOnce({
       pages: [{ slug: 'home', title: 'Home', mtime: '2024-01-01' }]
     });
-    (getPage as jest.Mock).mockResolvedValueOnce({
-      content: '# Home',
-      head_sha: 'abc123'
-    });
+    (getPage as jest.Mock).mockResolvedValueOnce({ content: '# Home', head_sha: 'abc123' });
     (getBacklinks as jest.Mock).mockResolvedValueOnce({
       backlinks: ['about.md', 'contact.md', 'index.md']
     });
-
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
     });
-    browser._wikiSelect.value = 'test';
-    await browser.loadPages();
-    await browser.loadPage('home');
 
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await browser.loadPage('home');
     await new Promise(resolve => setTimeout(resolve, 50));
 
     const title = browser.node.querySelector('.jp-WikiBrowser-backlinksTitle');
@@ -410,19 +370,15 @@ describe('WikiBrowser', () => {
     (listPages as jest.Mock).mockResolvedValueOnce({
       pages: [{ slug: 'home', title: 'Home', mtime: '2024-01-01' }]
     });
-    (getPage as jest.Mock).mockResolvedValueOnce({
-      content: '# Home',
-      head_sha: 'abc123'
-    });
+    (getPage as jest.Mock).mockResolvedValueOnce({ content: '# Home', head_sha: 'abc123' });
     (getBacklinks as jest.Mock).mockRejectedValueOnce(new Error('API error'));
-
-    browser.populateWikis({
-      test: { id: 'test', name: 'Test', path: '/tmp/test' }
+    (getGitStatus as jest.Mock).mockResolvedValueOnce({
+      branch: 'main', ahead: 0, behind: 0, dirty: false, untracked: 0
     });
-    browser._wikiSelect.value = 'test';
-    await browser.loadPages();
-    await browser.loadPage('home');
 
+    browser.setActiveWiki('test', 'Test', '/tmp/test');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await browser.loadPage('home');
     await new Promise(resolve => setTimeout(resolve, 50));
 
     const title = browser.node.querySelector('.jp-WikiBrowser-backlinksTitle');

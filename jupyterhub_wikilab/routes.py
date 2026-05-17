@@ -9,9 +9,9 @@ from jupyter_server.utils import url_path_join
 import tornado
 
 from jupyterhub_wikilab.wiki_service import (
-    list_wikis,
-    create_wiki,
-    remove_wiki,
+    probe_wiki,
+    init_wiki,
+    get_wiki_path,
     list_pages,
     get_page_content,
     get_page_with_sha,
@@ -21,31 +21,6 @@ from jupyterhub_wikilab.wiki_service import (
     rename_page,
     ConflictError,
 )
-
-# Per-wiki asyncio locks for serializing write operations
-# Keyed by canonical path (not wiki_id) so wikis sharing the same
-# filesystem path correctly serialize concurrent writes.
-_wiki_locks: Dict[str, asyncio.Lock] = {}
-
-
-def _get_wiki_lock(wiki_id: str) -> asyncio.Lock:
-    """Get or create an asyncio lock for a given wiki, keyed by its
-    canonical filesystem path rather than wiki_id.
-    """
-    from .wiki_service import get_wiki_path
-
-    path = get_wiki_path(wiki_id)
-    if path is None:
-        # Fallback: if wiki is not registered yet, fall back to wiki_id
-        # so the lock still provides some serialization.
-        cache_key = wiki_id
-    else:
-        cache_key = str(path)
-
-    if cache_key not in _wiki_locks:
-        _wiki_locks[cache_key] = asyncio.Lock()
-    return _wiki_locks[cache_key]
-
 
 from jupyterhub_wikilab.git_service import (
     get_wiki_git_status,
@@ -57,63 +32,93 @@ from jupyterhub_wikilab.git_service import (
     backlinks_grep_results,
 )
 
+# Per-wiki asyncio locks for serializing write operations.
+# Keyed by canonical path so wikis sharing the same filesystem path
+# correctly serialize concurrent writes.
+_wiki_locks: Dict[str, asyncio.Lock] = {}
 
-class WikiListHandler(APIHandler):
-    """Handler for listing wikis."""
+# Server root — set once in setup_route_handlers() and used for path validation.
+_SERVER_ROOT: str = ""
+
+
+def _get_wiki_lock(wiki_id: str) -> asyncio.Lock:
+    """Get or create an asyncio lock for a given wiki, keyed by its path."""
+    path = get_wiki_path(wiki_id)
+    cache_key = str(path) if path is not None else wiki_id
+    if cache_key not in _wiki_locks:
+        _wiki_locks[cache_key] = asyncio.Lock()
+    return _wiki_locks[cache_key]
+
+
+def _is_under_server_root(abs_path: str) -> bool:
+    """Return True if abs_path is inside or equal to the server root."""
+    if not _SERVER_ROOT:
+        return False
+    try:
+        Path(abs_path).resolve().relative_to(Path(_SERVER_ROOT).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+class WikiProbeHandler(APIHandler):
+    """GET /wikilab/api/probe?path=...
+
+    Checks whether a directory is a wikilab wiki (.wikilab + .git present).
+    On success primes the in-memory wiki_id → path cache.
+    """
 
     @tornado.web.authenticated
     def get(self):
-        """Get list of all wikis."""
-        wikis = list_wikis()
-        self.finish(json.dumps({"wikis": wikis}))
+        raw_path = self.get_argument("path", "")
+        if not raw_path:
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Missing path parameter"}))
+            return
+
+        path = Path(raw_path).resolve()
+        if not _is_under_server_root(str(path)):
+            self.set_status(403)
+            self.finish(json.dumps({"error": "Path outside server root"}))
+            return
+
+        result = probe_wiki(path)
+        if result:
+            self.finish(json.dumps({"is_wiki": True, **result}))
+        else:
+            self.finish(json.dumps({"is_wiki": False}))
 
 
-class WikiCreateHandler(APIHandler):
-    """Handler for creating a wiki."""
+class WikiInitHandler(APIHandler):
+    """POST /wikilab/api/init
+
+    Body: {"path": "...", "name": "..."}
+    Creates .wikilab, ensures .git exists, adds .wikilab to .gitignore.
+    Returns {"id": ..., "name": ..., "path": ...}.
+    """
 
     @tornado.web.authenticated
-    def post(self, wiki_id):
-        """Create a new wiki."""
+    def post(self):
         body = self.get_json_body()
-        # Prefer wiki_id from URL path; fall back to body
-        wiki_id = wiki_id or body.get("id")
-        name = body.get("name")
-        path = body.get("path")
-
-        if not wiki_id or not name or not path:
+        raw_path = body.get("path", "")
+        name = body.get("name", "")
+        if not raw_path or not name:
             self.set_status(400)
-            self.finish(
-                json.dumps({"error": "Missing required fields: id, name, path"})
-            )
+            self.finish(json.dumps({"error": "Missing required fields: path, name"}))
             return
 
-        # Validate path is a real directory
-        path_obj = Path(path)
-        if not path_obj.is_dir():
-            self.set_status(400)
-            self.finish(json.dumps({"error": "Path must be an existing directory"}))
+        path = Path(raw_path).resolve()
+        if not _is_under_server_root(str(path)):
+            self.set_status(403)
+            self.finish(json.dumps({"error": "Path outside server root"}))
             return
 
-        success = create_wiki(wiki_id, name, path)
-        if success:
-            self.finish(json.dumps({"message": "Wiki created successfully"}))
-        else:
+        try:
+            info = init_wiki(path, name)
+            self.finish(json.dumps(info))
+        except ValueError as exc:
             self.set_status(400)
-            self.finish(json.dumps({"error": "Failed to create wiki"}))
-
-
-class WikiDeleteHandler(APIHandler):
-    """Handler for deleting a wiki."""
-
-    @tornado.web.authenticated
-    def delete(self, wiki_id):
-        """Delete a wiki."""
-        success = remove_wiki(wiki_id)
-        if success:
-            self.finish(json.dumps({"message": "Wiki deleted successfully"}))
-        else:
-            self.set_status(404)
-            self.finish(json.dumps({"error": "Wiki not found"}))
+            self.finish(json.dumps({"error": str(exc)}))
 
 
 class WikiPageListHandler(APIHandler):
@@ -121,9 +126,8 @@ class WikiPageListHandler(APIHandler):
 
     @tornado.web.authenticated
     def get(self, wiki_id, slug=None):
-        """Get list of pages in a wiki (no slug) or forward to get if slug provided."""
+        """Get list of pages in a wiki (no slug) or content if slug provided."""
         if slug is not None:
-            # Defer to WikiPageGetHandler
             content = get_page_content(wiki_id, slug)
             if content is not None:
                 self.finish(json.dumps({"content": content}))
@@ -136,11 +140,7 @@ class WikiPageListHandler(APIHandler):
 
 
 class WikiPageContentHandler(APIHandler):
-    """Handler for getting and saving a page.
-
-    Merged GET and PUT into a single handler because tornado would
-    otherwise overwrite duplicate URL patterns.
-    """
+    """Handler for getting and saving a page."""
 
     @tornado.web.authenticated
     def get(self, wiki_id, slug):
@@ -174,7 +174,7 @@ class WikiPageContentHandler(APIHandler):
                 success = save_page(wiki_id, slug, content, head_sha, user=user)
         except ConflictError as exc:
             self.set_status(409)
-            response = {
+            response: Dict[str, Any] = {
                 "error": "Stale write detected, page was modified",
             }
             if exc.base_content is not None:
@@ -272,7 +272,6 @@ class WikiGitStatusHandler(APIHandler):
 
     @tornado.web.authenticated
     def get(self, wiki_id):
-        """Get Git status."""
         status = get_wiki_git_status(wiki_id)
         self.finish(json.dumps({"status": status}))
 
@@ -282,7 +281,6 @@ class WikiGitPullHandler(APIHandler):
 
     @tornado.web.authenticated
     def post(self, wiki_id):
-        """Pull from remote."""
         success = git_pull_wiki(wiki_id)
         if success:
             self.finish(json.dumps({"message": "Git pull successful"}))
@@ -296,7 +294,6 @@ class WikiGitPushHandler(APIHandler):
 
     @tornado.web.authenticated
     def post(self, wiki_id):
-        """Push to remote."""
         success = git_push_wiki(wiki_id)
         if success:
             self.finish(json.dumps({"message": "Git push successful"}))
@@ -310,18 +307,12 @@ class WikiPageHistoryHandler(APIHandler):
 
     @tornado.web.authenticated
     def get(self, wiki_id, slug):
-        """Get commit history for a page."""
-        wiki_path = None
-        wikis = list_wikis()
-        if wiki_id in wikis:
-            wiki_path = wikis[wiki_id].get("path")
-
-        if wiki_path is None:
+        wiki_path_obj = get_wiki_path(wiki_id)
+        if wiki_path_obj is None:
             self.set_status(404)
             self.finish(json.dumps({"error": "Wiki not found"}))
             return
-
-        history = get_file_history(str(wiki_path), f"{slug}.md")
+        history = get_file_history(str(wiki_path_obj), f"{slug}.md")
         self.finish(json.dumps({"history": history}))
 
 
@@ -330,18 +321,12 @@ class WikiPageHistoryShaHandler(APIHandler):
 
     @tornado.web.authenticated
     def get(self, wiki_id, slug, sha):
-        """Get page content as it existed at the given commit SHA."""
-        wiki_path = None
-        wikis = list_wikis()
-        if wiki_id in wikis:
-            wiki_path = wikis[wiki_id].get("path")
-
-        if wiki_path is None:
+        wiki_path_obj = get_wiki_path(wiki_id)
+        if wiki_path_obj is None:
             self.set_status(404)
             self.finish(json.dumps({"error": "Wiki not found"}))
             return
-
-        content = get_page_content_at_sha(str(wiki_path), f"{slug}.md", sha)
+        content = get_page_content_at_sha(str(wiki_path_obj), f"{slug}.md", sha)
         if content is not None:
             self.finish(json.dumps({"content": content}))
         else:
@@ -354,18 +339,12 @@ class WikiPageBacklinksHandler(APIHandler):
 
     @tornado.web.authenticated
     def get(self, wiki_id, slug):
-        """Get backlinks for a page."""
-        wiki_path = None
-        wikis = list_wikis()
-        if wiki_id in wikis:
-            wiki_path = wikis[wiki_id].get("path")
-
-        if wiki_path is None:
+        wiki_path_obj = get_wiki_path(wiki_id)
+        if wiki_path_obj is None:
             self.set_status(404)
             self.finish(json.dumps({"error": "Wiki not found"}))
             return
-
-        backlinks = backlinks_grep_results(str(wiki_path), f"{slug}.md")
+        backlinks = backlinks_grep_results(str(wiki_path_obj), f"{slug}.md")
         self.finish(json.dumps({"backlinks": backlinks}))
 
 
@@ -374,13 +353,8 @@ class WikiPageSearchHandler(APIHandler):
 
     @tornado.web.authenticated
     def get(self, wiki_id):
-        """Search wiki content using git grep."""
-        wiki_path = None
-        wikis = list_wikis()
-        if wiki_id in wikis:
-            wiki_path = wikis[wiki_id].get("path")
-
-        if wiki_path is None:
+        wiki_path_obj = get_wiki_path(wiki_id)
+        if wiki_path_obj is None:
             self.set_status(404)
             self.finish(json.dumps({"error": "Wiki not found"}))
             return
@@ -392,32 +366,34 @@ class WikiPageSearchHandler(APIHandler):
             return
 
         case_sensitive = self.get_argument("case_sensitive", "false").lower() == "true"
-        results = search_grep_results(str(wiki_path), term, case_sensitive)
+        results = search_grep_results(str(wiki_path_obj), term, case_sensitive)
         self.finish(json.dumps({"results": results}))
 
 
 def setup_route_handlers(web_app):
     """Setup all the route handlers for the wiki extension."""
-    host_pattern = ".*$"
+    global _SERVER_ROOT
+    _SERVER_ROOT = (
+        str(web_app.settings.get("root_dir", "")) or os.path.expanduser("~")
+    )
+
     base_url = web_app.settings.get("base_url", "/")
 
-    # Wiki routes
-    wiki_route_pattern = url_path_join(base_url, "wikilab", "api", "wikis")
+    # Discovery routes
+    probe_url = url_path_join(base_url, "wikilab", "api", "probe")
+    init_url = url_path_join(base_url, "wikilab", "api", "init")
+
     handlers = [
-        (wiki_route_pattern, WikiListHandler),
-        (url_path_join(wiki_route_pattern, r"([^/]+)$"), WikiCreateHandler),
-        (url_path_join(wiki_route_pattern, r"([^/]+)/delete/?"), WikiDeleteHandler),
+        (probe_url, WikiProbeHandler),
+        (init_url, WikiInitHandler),
     ]
 
     # Wiki page routes
-    # NOTE: Specific routes must come before the wildcard list route so that
-    # tornado's first-match-wins ordering gives priority to dedicated handlers.
     wiki_pages_route_pattern = url_path_join(
         base_url, "wikilab", "api", "wikis", r"([^/]+)", "pages"
     )
     handlers.extend(
         [
-            # Page action routes (create has no slug; delete/rename need slug)
             (
                 url_path_join(wiki_pages_route_pattern, "create$"),
                 WikiPageCreateHandler,
@@ -430,7 +406,6 @@ def setup_route_handlers(web_app):
                 url_path_join(wiki_pages_route_pattern, r"([^/]+)/rename$"),
                 WikiPageRenameHandler,
             ),
-            # Page read-feature routes (specific routes before wildcard)
             (
                 url_path_join(wiki_pages_route_pattern, "search$"),
                 WikiPageSearchHandler,
@@ -447,29 +422,35 @@ def setup_route_handlers(web_app):
                 url_path_join(wiki_pages_route_pattern, r"([^/]+)/backlinks$"),
                 WikiPageBacklinksHandler,
             ),
-            # Single-segment route (get/save merged into one handler)
+            # Page content GET/PUT (must come after specific routes)
             (
-                url_path_join(wiki_pages_route_pattern, r"([^/]+)$"),
+                url_path_join(wiki_pages_route_pattern, r"(.+)$"),
                 WikiPageContentHandler,
             ),
-            # Wildcard list route — must be last to avoid shadowing above routes
-            (
-                url_path_join(wiki_pages_route_pattern, r"/?$"),
-                WikiPageListHandler,
-            ),
+            # Page list (no slug)
+            (wiki_pages_route_pattern, WikiPageListHandler),
         ]
     )
 
-    # Wiki Git routes
+    # Git routes
     wiki_git_route_pattern = url_path_join(
         base_url, "wikilab", "api", "wikis", r"([^/]+)", "git"
     )
     handlers.extend(
         [
-            (url_path_join(wiki_git_route_pattern, "status$"), WikiGitStatusHandler),
-            (url_path_join(wiki_git_route_pattern, "pull$"), WikiGitPullHandler),
-            (url_path_join(wiki_git_route_pattern, "push$"), WikiGitPushHandler),
+            (
+                url_path_join(wiki_git_route_pattern, "status$"),
+                WikiGitStatusHandler,
+            ),
+            (
+                url_path_join(wiki_git_route_pattern, "pull$"),
+                WikiGitPullHandler,
+            ),
+            (
+                url_path_join(wiki_git_route_pattern, "push$"),
+                WikiGitPushHandler,
+            ),
         ]
     )
 
-    web_app.add_handlers(host_pattern, handlers)
+    web_app.add_handlers(".*$", handlers)

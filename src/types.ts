@@ -6,22 +6,24 @@
  * Every field name matches the backend serialiser exactly.
  */
 
-// ── Wiki types ──────────────────────────────────────────────────────────────
+// ── Wiki discovery types ────────────────────────────────────────────────────
 
-/** A registered wiki entry returned by the backend. */
-export interface WikiInfo {
-  id: string;
-  name: string;
+/** GET /probe?path=... response body. */
+export interface WikiProbeResponse {
+  is_wiki: boolean;
+  id?: string;
+  name?: string;
+  path?: string;
+}
+
+/** POST /init request body. */
+export interface WikiInitRequest {
   path: string;
+  name: string;
 }
 
-/** GET /wikis response body. */
-export interface WikiListResponse {
-  wikis: Record<string, WikiInfo>;
-}
-
-/** POST /wikis/{id} request body. */
-export interface WikiCreateRequest {
+/** POST /init response body. */
+export interface WikiInitResponse {
   id: string;
   name: string;
   path: string;
@@ -155,9 +157,8 @@ export interface BacklinksResponse {
  * Used by `wikiApi.ts` to keep callers fully typed.
  */
 export type ApiResponseMap = {
-  'GET:/wikis': WikiListResponse;
-  'POST:/wikis': OperationResponse;
-  'DELETE:/wikis': OperationResponse;
+  'GET:/probe': WikiProbeResponse;
+  'POST:/init': WikiInitResponse;
   'GET:/wikis/:id/pages': PageListResponse;
   'GET:/wikis/:id/pages/:slug': PageGetResponse;
   'PUT:/wikis/:id/pages/:slug': OperationResponse;

@@ -10,8 +10,9 @@ import { ServerConnection } from '@jupyterlab/services';
 
 import { requestAPI } from './request';
 import type {
-  WikiListResponse,
-  WikiCreateRequest,
+  WikiProbeResponse,
+  WikiInitRequest,
+  WikiInitResponse,
   OperationResponse,
   PageListResponse,
   PageGetResponse,
@@ -39,56 +40,37 @@ function wikiUrl(wikiId: string, ...segments: string[]): string {
   return parts.filter(Boolean).join('/');
 }
 
-// ── Wiki endpoints ──────────────────────────────────────────────────────────
+// ── Wiki discovery endpoints ────────────────────────────────────────────────
 
 /**
- * List all registered wikis for the current user.
+ * Check whether a directory is a wikilab wiki.
  *
- * `GET /wikis`
+ * `GET /probe?path=...`
  */
-export async function listWikis(
+export async function probeWiki(
+  path: string,
   serverSettings: ServerConnection.ISettings
-): Promise<WikiListResponse> {
-  return requestAPI<WikiListResponse>('wikis', serverSettings, {
+): Promise<WikiProbeResponse> {
+  const params = new URLSearchParams({ path });
+  return requestAPI<WikiProbeResponse>(`probe?${params}`, serverSettings, {
     method: 'GET'
   });
 }
 
 /**
- * Register a new wiki.
+ * Initialize a new wiki in the given directory.
  *
- * `POST /wikis/{wiki_id}`
+ * `POST /init`
  */
-export async function createWiki(
-  wikiId: string,
-  payload: WikiCreateRequest,
+export async function initWiki(
+  payload: WikiInitRequest,
   serverSettings: ServerConnection.ISettings
-): Promise<OperationResponse> {
-  return requestAPI<OperationResponse>(
-    `wikis/${encodeURIComponent(wikiId)}`,
-    serverSettings,
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      headers: { 'Content-Type': 'application/json' }
-    }
-  );
-}
-
-/**
- * Remove a registered wiki.
- *
- * `DELETE /wikis/{wiki_id}/delete`
- */
-export async function deleteWiki(
-  wikiId: string,
-  serverSettings: ServerConnection.ISettings
-): Promise<OperationResponse> {
-  return requestAPI<OperationResponse>(
-    `wikis/${encodeURIComponent(wikiId)}/delete`,
-    serverSettings,
-    { method: 'DELETE' }
-  );
+): Promise<WikiInitResponse> {
+  return requestAPI<WikiInitResponse>('init', serverSettings, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' }
+  });
 }
 
 // ── Page endpoints ──────────────────────────────────────────────────────────
