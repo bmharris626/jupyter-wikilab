@@ -224,6 +224,118 @@
   font-style: italic;
 }
 
+/* ── Editor formatting toolbar ──────────────────────────────────────────── */
+
+.jp-WikiEditor-editorHost {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.jp-WikiEditor-editorToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--jp-border-color2);
+  background: var(--jp-layout-color1);
+  flex: 0 0 auto;
+}
+
+.jp-WikiEditor-toolbarBtn {
+  flex: 0 0 auto;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--jp-ui-font-color1);
+  font-size: var(--jp-ui-font-size1);
+  font-family: var(--jp-ui-font-family);
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.jp-WikiEditor-toolbarBtn:hover {
+  background: var(--jp-layout-color3);
+  border-color: var(--jp-border-color1);
+  color: var(--jp-ui-font-color0);
+}
+
+.jp-WikiEditor-toolbarBtn:active {
+  background: var(--jp-layout-color4);
+}
+
+.jp-WikiEditor-toolbarSep {
+  width: 1px;
+  height: 18px;
+  background: var(--jp-border-color2);
+  margin: 0 3px;
+  flex: 0 0 auto;
+}
+
+.jp-WikiEditor-cmEditor {
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.jp-WikiEditor-cmEditor .cm-editor {
+  height: 100%;
+}
+
+/* ── Table grid picker ───────────────────────────────────────────────────── */
+
+.jp-WikiEditor-tablePicker {
+  position: absolute;
+  z-index: 100;
+  background: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 4px;
+  padding: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  user-select: none;
+}
+
+.jp-WikiEditor-tablePickerLabel {
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color2);
+  text-align: center;
+  margin-bottom: 4px;
+  min-height: 14px;
+}
+
+.jp-WikiEditor-tablePickerGrid {
+  display: grid;
+  grid-template-columns: repeat(8, 18px);
+  grid-auto-rows: 18px;
+  gap: 2px;
+}
+
+.jp-WikiEditor-tablePickerCell {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 2px;
+  background: var(--jp-layout-color2);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.jp-WikiEditor-tablePickerCell--active {
+  background: var(--jp-brand-color2);
+  border-color: var(--jp-brand-color1);
+}
+
 /* ── Editor/preview split handle ───────────────────────────────────────── */
 
 .jp-WikiEditor > .lm-SplitPanel-handle {
