@@ -38,6 +38,8 @@ class ConflictError(Exception):
 def slugify(title: str) -> str:
     """Convert a title to a URL-friendly slug."""
     slug = title.lower()
+    if slug.endswith(".md"):
+        slug = slug[: -len(".md")]
     slug = re.sub(r"[^a-z0-9]+", "-", slug)
     slug = slug.strip("-")
     return slug

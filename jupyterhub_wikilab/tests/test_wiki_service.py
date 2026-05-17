@@ -13,6 +13,10 @@ def test_slugify_edge_cases():
     assert wiki_service.slugify("Already-slugified") == "already-slugified"
     assert wiki_service.slugify("Version 2.0 Notes") == "version-2-0-notes"
     assert wiki_service.slugify("---") == ""
+    # .md suffix is stripped before slugification
+    assert wiki_service.slugify("index.md") == "index"
+    assert wiki_service.slugify("My Page.md") == "my-page"
+    assert wiki_service.slugify("README.MD") == "readme"
 
 
 def test_get_page_path_appends_markdown_suffix():
