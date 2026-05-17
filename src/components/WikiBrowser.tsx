@@ -339,10 +339,10 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
 
     // Init-wiki button — onclick wired in set serverSettings()
     this._initWikiBtn = document.createElement('button');
-    this._initWikiBtn.className = `${CSS_PREFIX}-iconBtn`;
-    this._initWikiBtn.textContent = '+ Init Wiki Here';
+    this._initWikiBtn.className = `${CSS_PREFIX}-gitBtn`;
+    this._initWikiBtn.textContent = '+ Init';
     this._initWikiBtn.setAttribute('aria-label', 'Initialize wiki in current directory');
-    this._initWikiBtn.setAttribute('title', 'Initialize wiki in current directory');
+    this._initWikiBtn.setAttribute('title', 'Initialize wiki in this directory');
     this._initWikiBtn.style.display = 'none'; // shown only when no wiki is active
 
     wikiRow.appendChild(label);
