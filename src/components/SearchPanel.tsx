@@ -121,6 +121,7 @@ export class SearchPanel extends Panel implements ISearchPanel {
 
     this._searchInput.value = term;
     this._loading = true;
+    this._hasSearched = true;
     this._renderResults();
 
     try {
@@ -146,6 +147,7 @@ export class SearchPanel extends Panel implements ISearchPanel {
   clear(): void {
     this._searchInput.value = '';
     this._searchResults = [];
+    this._hasSearched = false;
     this._renderResults();
   }
 
@@ -178,6 +180,7 @@ export class SearchPanel extends Panel implements ISearchPanel {
   private _serverSettings: ServerConnection.ISettings | null = null;
   private _loading = false;
   private _searchResults: SearchResult[] = [];
+  private _hasSearched = false;
 
   // ── DOM construction ───────────────────────────────────────────────────
 
@@ -313,6 +316,9 @@ export class SearchPanel extends Panel implements ISearchPanel {
     }
 
     if (this._searchResults.length === 0) {
+      if (!this._hasSearched) {
+        return;
+      }
       const emptyRow = document.createElement('div');
       emptyRow.className = `${CSS_PREFIX}-row ${CSS_PREFIX}-rowEmpty`;
       const emptyMsg = document.createElement('div');

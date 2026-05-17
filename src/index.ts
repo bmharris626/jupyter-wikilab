@@ -14,14 +14,14 @@ import { listWikis } from './wikiApi';
 import { WikiBrowser } from './components/WikiBrowser';
 import { WikiEditor } from './components/WikiEditor';
 import { ConflictView } from './components/ConflictView';
-import { onDirtyChange, handlePageSwitch } from './utils/dirtyState';
+import { onDirtyChange } from './utils/dirtyState';
 
 import { IWikiBrowser, IWikiEditor } from './tokens';
 
 import { registerCommands, setReloadWikis } from './commands';
 
-// Module-level reference so editorPlugin can access the editor
-// created in the main plugin (both share this module scope).
+// Module-level reference so editorPlugin can access the most recently
+// opened editor (both plugins share this module scope).
 let _editorInstance: WikiEditor | null = null;
 
 // ── Settings cache ──────────────────────────────────────────────────────────
@@ -43,8 +43,9 @@ export function getSettings(): ISettingRegistry.ISettings | null {
  * Initialization data for the jupyterhub-wikilab extension.
  *
  * Instantiates the sidebar and editor, registers the sidebar
- * in JupyterLab's left area, and the editor in the main area.
- * Provides the WikiBrowser token for dependency injection.
+ * in JupyterLab's left area, and opens a new editor tab in the
+ * main area for each page selected. Provides the WikiBrowser token
+ * for dependency injection.
  */
 const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
   id: 'jupyterhub-wikilab:plugin',
@@ -95,111 +96,128 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
         .catch(() => {/* keep current list */});
     };
 
-    // ── WikiEditor (main area) ─────────────────────────────────────────────
+    // ── Open editor tabs: "${wikiId}:${slug}" → { widget, editor } ────────
 
-    const editor = new WikiEditor();
-    editor.serverSettings = serverSettings;
-    _editorInstance = editor;
+    const editorTabs = new Map<
+      string,
+      { widget: MainAreaWidget; editor: WikiEditor }
+    >();
 
-    // ── Main-area widget wrapping the editor ───────────────────────────────
-
-    const editorWidget = new MainAreaWidget({ content: editor });
-    editorWidget.id = 'wikilab-editor';
-    editorWidget.title.caption = 'WikiLab Editor';
-    editorWidget.title.iconClass = 'lm-FileIcon';
-    editorWidget.title.closable = false;
-
-    // ── Unsaved-changes guard ─────────────────────────────────────────────
-
-    editor.contentChanged.connect(() => onDirtyChange(editor));
-
-    // ── Conflict resolution flow ──────────────────────────────────────────
-
-    let conflictView: ConflictView | null = null;
-    let currentSlug = '';
-
-    browser.pageSelected.connect((_, args) => {
-      currentSlug = args.slug;
-    });
-
-    editor.conflictDetected.connect(async (_, conflictArgs) => {
-      if (conflictView) {
-        conflictView.dispose();
-        conflictView = null;
-      }
-
-      const cvId = `wikilab-conflict-${Date.now()}`;
-      conflictView = new ConflictView({
-        response: {
-          error: 'Stale write detected, page was modified',
-          base_content: conflictArgs.baseContent,
-          their_content: conflictArgs.theirContent
-        },
-        editorContent: conflictArgs.editorContent,
-        onResolve: (resolvedContent: string) => {
-          editor.setContent(resolvedContent);
-          void editor.save();
-          if (conflictView) {
-            conflictView.dispose();
-            conflictView = null;
-          }
-        },
-        onDiscard: () => {
-          void browser
-            .loadPage(currentSlug)
-            .then(content => {
-              editor.setContent(content);
-            })
-            .catch(() => {
-              // Reload failed — keep editor as-is
-            });
-          if (conflictView) {
-            conflictView.dispose();
-            conflictView = null;
-          }
-        }
-      });
-
-      // Place conflict view above the editor in the main area
-      conflictView.id = cvId;
-      conflictView.title.label = 'Resolve Conflict';
-      app.shell.add(conflictView, 'main', { rank: 99 });
-    });
-
-    // ── Keep editor autocomplete in sync with the page list ───────────────
+    // ── Keep all open editors in sync with the page list ──────────────────
 
     browser.pagesLoaded.connect((_, pages) => {
-      editor.setPages(pages);
+      for (const { editor } of editorTabs.values()) {
+        editor.setPages(pages);
+      }
     });
 
-    // ── Update editor reference when the open page is renamed ─────────────
+    // ── Update tab label + re-key map when a page is renamed ──────────────
 
     browser.pageRenamed.connect((_, args) => {
-      if (editor.page?.slug === args.oldSlug) {
-        editor.page = {
-          slug: args.newSlug,
-          title: args.newTitle,
-          mtime: new Date().toISOString()
-        };
-        editorWidget.title.label = args.newTitle || args.newSlug;
-        // Clear the saved SHA so the next save doesn't hit a stale-write error
-        editor.setPage(browser.activeWikiId, args.newSlug, undefined);
+      const oldKey = `${browser.activeWikiId}:${args.oldSlug}`;
+      const tab = editorTabs.get(oldKey);
+      if (!tab) {
+        return;
       }
+      tab.widget.title.label = args.newTitle || args.newSlug;
+      tab.editor.page = {
+        slug: args.newSlug,
+        title: args.newTitle,
+        mtime: new Date().toISOString()
+      };
+      // Clear the saved SHA so the next save doesn't hit a stale-write error
+      tab.editor.setPage(browser.activeWikiId, args.newSlug, undefined);
+      editorTabs.delete(oldKey);
+      editorTabs.set(`${browser.activeWikiId}:${args.newSlug}`, tab);
     });
 
-    // ── Wire page click → load content into editor ─────────────────────────
+    // ── Wire page click → open (or activate) a tab per page ───────────────
 
     browser.pageSelected.connect(async (_, args) => {
-      await handlePageSwitch(editor, browser.activeWikiId, {
-        slug: args.slug,
-        head_sha: args.head_sha,
-        content: browser._lastLoadedContent
-      });
-      editorWidget.title.label = args.title || args.slug;
-      if (!editorWidget.isAttached) {
-        app.shell.add(editorWidget, 'main', { rank: 100 });
+      const wikiId = browser.activeWikiId;
+      const tabKey = `${wikiId}:${args.slug}`;
+      const existing = editorTabs.get(tabKey);
+
+      if (existing) {
+        app.shell.activateById(existing.widget.id);
+        return;
       }
-      app.shell.activateById('wikilab-editor');
+
+      // ── Create a new editor instance for this page ─────────────────────
+
+      const editor = new WikiEditor();
+      editor.serverSettings = serverSettings;
+      editor.setPages(browser.pages);
+      editor.page = {
+        slug: args.slug,
+        title: args.title || args.slug,
+        mtime: new Date().toISOString()
+      };
+      editor.setContent(browser._lastLoadedContent ?? '', false);
+      editor.setPage(wikiId, args.slug, args.head_sha);
+
+      const safeKey = tabKey.replace(/[^a-z0-9]/gi, '-');
+      const widgetId = `wikilab-editor-${safeKey}`;
+
+      const widget = new MainAreaWidget({ content: editor });
+      widget.id = widgetId;
+      widget.title.label = args.title || args.slug;
+      widget.title.caption = 'WikiLab Editor';
+      widget.title.iconClass = 'lm-FileIcon';
+      widget.title.closable = true;
+
+      // ── Unsaved-changes guard ──────────────────────────────────────────
+
+      editor.contentChanged.connect(() => onDirtyChange(editor));
+
+      // ── Conflict resolution flow ───────────────────────────────────────
+
+      const editorSlug = args.slug;
+      editor.conflictDetected.connect(async (_, conflictArgs) => {
+        let conflictView: ConflictView | null = null;
+        const cvId = `wikilab-conflict-${Date.now()}`;
+        conflictView = new ConflictView({
+          response: {
+            error: 'Stale write detected, page was modified',
+            base_content: conflictArgs.baseContent,
+            their_content: conflictArgs.theirContent
+          },
+          editorContent: conflictArgs.editorContent,
+          onResolve: (resolvedContent: string) => {
+            editor.setContent(resolvedContent);
+            void editor.save();
+            conflictView?.dispose();
+            conflictView = null;
+          },
+          onDiscard: () => {
+            void browser
+              .loadPage(editorSlug)
+              .then(content => {
+                editor.setContent(content);
+              })
+              .catch(() => {
+                // Reload failed — keep editor as-is
+              });
+            conflictView?.dispose();
+            conflictView = null;
+          }
+        });
+        conflictView.id = cvId;
+        conflictView.title.label = 'Resolve Conflict';
+        app.shell.add(conflictView, 'main', { rank: 99 });
+      });
+
+      // ── Remove from map when tab is closed ────────────────────────────
+
+      widget.disposed.connect(() => {
+        editorTabs.delete(tabKey);
+      });
+
+      editorTabs.set(tabKey, { widget, editor });
+      _editorInstance = editor;
+
+      app.shell.add(widget, 'main', { rank: 100 });
+      app.shell.activateById(widgetId);
     });
 
     sidebarLayout.addWidget(browser);
@@ -216,12 +234,6 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
     // ── Register sidebar in left area ──────────────────────────────────────
 
     app.shell.add(sidebar, 'left', { rank: 100 });
-
-    // ── Register editor in main area ───────────────────────────────────────
-
-    app.shell.add(editorWidget, 'main', { rank: 100 });
-
-    // ── Return the WikiBrowser service ─────────────────────────────────────
 
     console.log('JupyterLab extension jupyterhub-wikilab is activated!');
 

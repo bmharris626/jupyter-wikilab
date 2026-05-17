@@ -115,7 +115,7 @@ function _applyPageSwitch(
     title: '',
     mtime: new Date().toISOString()
   };
-  editor.setPage(browserWikiId, args.slug, args.head_sha);
   editor.setContent(args.content ?? '', false);
+  editor.setPage(browserWikiId, args.slug, args.head_sha);
   editor.focus();
 }
