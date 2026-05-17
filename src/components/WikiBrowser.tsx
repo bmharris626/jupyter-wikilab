@@ -22,7 +22,7 @@ import { Panel, PanelLayout } from '@lumino/widgets';
 
 import { ServerConnection } from '@jupyterlab/services';
 
-import { InputDialog } from '@jupyterlab/apputils';
+import { InputDialog, showDialog, Dialog } from '@jupyterlab/apputils';
 
 import { Signal } from '@lumino/signaling';
 
@@ -33,14 +33,23 @@ import {
   gitPull,
   gitPush,
   getBacklinks,
-  createPage
+  createPage,
+  renamePage,
+  savePage,
+  searchWiki
 } from '../wikiApi';
 import { openRegisterWikiDialog } from '../commands';
+import { SearchPanel } from './SearchPanel';
 import type { WikiInfo, PageEntry, GitStatusResponse } from '../types';
 
 // ── CSS class namespace ─────────────────────────────────────────────────────
 
 const CSS_PREFIX = 'jp-WikiBrowser';
+
+/** Escape a string for safe use inside a RegExp literal. */
+function _escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 // ── Public interface ────────────────────────────────────────────────────────
 
@@ -69,6 +78,18 @@ export interface PageSelectedArgs {
   title: string;
   /** The current git commit SHA for optimistic locking. */
   head_sha?: string;
+}
+
+/** Arguments carried by the page-renamed event. */
+export interface PageRenamedArgs {
+  /** Slug of the page before rename. */
+  oldSlug: string;
+  /** Old title of the page. */
+  oldTitle: string;
+  /** New slug (derived from newTitle). */
+  newSlug: string;
+  /** New title. */
+  newTitle: string;
 }
 
 // ── WikiBrowser widget ──────────────────────────────────────────────────────
@@ -101,7 +122,20 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._createPageList();
     this._createBacklinks();
 
+    this._searchPanel = new SearchPanel();
+    this._searchPanel.resultSelected.connect(async (_, args) => {
+      const slug = args.file.replace(/\.md$/, '');
+      try {
+        this._lastLoadedContent = await this.loadPage(slug);
+        this._emitPageSelected(slug, '');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        this._showPlaceholder(`Failed to load "${slug}": ${message}`);
+      }
+    });
+
     layout.addWidget(this._toolbar);
+    layout.addWidget(this._searchPanel);
     layout.addWidget(this._pagePanel);
     layout.addWidget(this._backlinksPanel);
   }
@@ -150,6 +184,7 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       this._showPlaceholder(`Failed to load pages: ${message}`);
       this._pages = [];
     }
+    this.pagesLoaded.emit(this._pages);
   }
 
   /**
@@ -213,11 +248,24 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
    */
   pageSelected = new Signal<this, PageSelectedArgs>(this);
 
+  /**
+   * Signal fired after loadPages() completes with the updated page list.
+   * Consumers (e.g. the editor) use this to refresh autocomplete data.
+   */
+  pagesLoaded = new Signal<this, PageEntry[]>(this);
+
+  /**
+   * Signal fired after a page is successfully renamed.
+   * Consumers update any open editor references pointing to the old slug.
+   */
+  pageRenamed = new Signal<this, PageRenamedArgs>(this);
+
   // ── Private helpers ────────────────────────────────────────────────────
 
   /** JupyterLab server settings — set by the plugin activator. */
   set serverSettings(settings: ServerConnection.ISettings) {
     this._serverSettings = settings;
+    this._searchPanel.serverSettings = settings;
     // Wire the + button now that we have server settings
     this._registerBtn.onclick = () => {
       if (!this._serverSettings) {
@@ -247,6 +295,10 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
   private _placeholder!: HTMLDivElement;
   private _newPageBtn!: HTMLButtonElement;
 
+  // ── Search panel ───────────────────────────────────────────────────────
+
+  private _searchPanel!: SearchPanel;
+
   // ── Backlinks panel ────────────────────────────────────────────────────
 
   private _backlinksPanel!: Panel;
@@ -274,6 +326,10 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     const prev = this.wikiSelected.newValue;
     this.wikiSelected.oldValue = prev;
     this.wikiSelected.newValue = this.activeWikiId;
+
+    this._newPageBtn.disabled = !this.activeWikiId;
+    this._searchPanel.setWikiId(this.activeWikiId);
+    this._searchPanel.clear();
 
     if (prev !== this.activeWikiId) {
       void Promise.all([this.loadPages(), this.refreshGitStatus()]);
@@ -388,6 +444,7 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._newPageBtn.textContent = '+';
     this._newPageBtn.setAttribute('aria-label', 'New page');
     this._newPageBtn.setAttribute('title', 'New page');
+    this._newPageBtn.disabled = true;
     this._newPageBtn.addEventListener('click', () => void this._handleNewPage());
 
     pageHeader.appendChild(pageTitle);
@@ -463,7 +520,19 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
         }
       });
 
+      // Rename action button — revealed on hover via CSS
+      const renameBtn = document.createElement('button');
+      renameBtn.className = `${CSS_PREFIX}-pageActionBtn`;
+      renameBtn.textContent = '✎';
+      renameBtn.setAttribute('title', `Rename "${page.title || page.slug}"`);
+      renameBtn.addEventListener('click', async (event: MouseEvent) => {
+        event.stopPropagation();
+        event.preventDefault();
+        await this._handleRenamePage(page);
+      });
+
       li.appendChild(link);
+      li.appendChild(renameBtn);
       this._pageList.appendChild(li);
     }
   }
@@ -639,6 +708,146 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       this._showPlaceholder(`Failed to create page: ${message}`);
+    }
+  }
+
+  private async _handleRenamePage(page: PageEntry): Promise<void> {
+    const wikiId = this.activeWikiId;
+    if (!wikiId || !this._serverSettings) {
+      return;
+    }
+
+    const result = await InputDialog.getText({
+      title: 'Rename Page',
+      label: 'New title',
+      text: page.title || page.slug,
+      okLabel: 'Rename'
+    });
+
+    if (!result.button.accept || !result.value?.trim()) {
+      return;
+    }
+
+    const newTitle = result.value.trim();
+    if (newTitle === page.title) {
+      return;
+    }
+
+    const newSlug = newTitle
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    try {
+      await renamePage(
+        wikiId,
+        page.slug,
+        { new_title: newTitle },
+        this._serverSettings
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      void showDialog({
+        title: 'Rename Failed',
+        body: message,
+        buttons: [Dialog.okButton()]
+      });
+      return;
+    }
+
+    // Notify listeners (e.g. index.ts updates the open editor) before cascade
+    this.pageRenamed.emit({
+      oldSlug: page.slug,
+      oldTitle: page.title || page.slug,
+      newSlug,
+      newTitle
+    });
+
+    // Offer to update [[Old Title]] references across the wiki
+    await this._cascadeRenameReferences(page.title || page.slug, newTitle, newSlug);
+
+    // Reload the page list to reflect the rename
+    await this.loadPages();
+  }
+
+  private async _cascadeRenameReferences(
+    oldTitle: string,
+    newTitle: string,
+    newSlug: string
+  ): Promise<void> {
+    const wikiId = this.activeWikiId;
+    if (!wikiId || !this._serverSettings) {
+      return;
+    }
+
+    let results;
+    try {
+      results = await searchWiki(
+        wikiId,
+        `[[${oldTitle}]]`,
+        true,
+        this._serverSettings
+      );
+    } catch {
+      return;
+    }
+
+    if (results.results.length === 0) {
+      return;
+    }
+
+    // Collect unique slugs that still reference the old title, excluding the
+    // renamed page itself (the backend already updated its own content)
+    const slugs = [
+      ...new Set(
+        results.results
+          .map(r => r.file.replace(/\.md$/, ''))
+          .filter(s => s !== newSlug)
+      )
+    ];
+
+    if (slugs.length === 0) {
+      return;
+    }
+
+    const confirmation = await showDialog({
+      title: 'Update References?',
+      body: `${slugs.length} page(s) still link to [[${oldTitle}]]. Update them to [[${newTitle}]]?`,
+      buttons: [
+        Dialog.cancelButton({ label: 'Skip' }),
+        Dialog.okButton({ label: 'Update All' })
+      ]
+    });
+
+    if (!confirmation.button.accept) {
+      return;
+    }
+
+    const oldLinkRe = new RegExp(
+      `\\[\\[${_escapeRegex(oldTitle)}\\]\\]`,
+      'g'
+    );
+
+    for (const slug of slugs) {
+      try {
+        const { content, head_sha } = await getPage(
+          wikiId,
+          slug,
+          this._serverSettings
+        );
+        const updated = content.replace(oldLinkRe, `[[${newTitle}]]`);
+        if (updated !== content) {
+          await savePage(
+            wikiId,
+            slug,
+            { content: updated, head_sha },
+            this._serverSettings
+          );
+        }
+      } catch {
+        // Best-effort: skip pages that fail and continue
+      }
     }
   }
 

@@ -107,6 +107,7 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
     editorWidget.id = 'wikilab-editor';
     editorWidget.title.caption = 'WikiLab Editor';
     editorWidget.title.iconClass = 'lm-FileIcon';
+    editorWidget.title.closable = false;
 
     // ── Unsaved-changes guard ─────────────────────────────────────────────
 
@@ -165,6 +166,27 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
       app.shell.add(conflictView, 'main', { rank: 99 });
     });
 
+    // ── Keep editor autocomplete in sync with the page list ───────────────
+
+    browser.pagesLoaded.connect((_, pages) => {
+      editor.setPages(pages);
+    });
+
+    // ── Update editor reference when the open page is renamed ─────────────
+
+    browser.pageRenamed.connect((_, args) => {
+      if (editor.page?.slug === args.oldSlug) {
+        editor.page = {
+          slug: args.newSlug,
+          title: args.newTitle,
+          mtime: new Date().toISOString()
+        };
+        editorWidget.title.label = args.newTitle || args.newSlug;
+        // Clear the saved SHA so the next save doesn't hit a stale-write error
+        editor.setPage(browser.activeWikiId, args.newSlug, undefined);
+      }
+    });
+
     // ── Wire page click → load content into editor ─────────────────────────
 
     browser.pageSelected.connect(async (_, args) => {
@@ -173,7 +195,10 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
         head_sha: args.head_sha,
         content: browser._lastLoadedContent
       });
-      // Focus the editor in the main area
+      editorWidget.title.label = args.title || args.slug;
+      if (!editorWidget.isAttached) {
+        app.shell.add(editorWidget, 'main', { rank: 100 });
+      }
       app.shell.activateById('wikilab-editor');
     });
 

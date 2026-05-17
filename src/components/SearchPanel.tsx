@@ -228,6 +228,11 @@ export class SearchPanel extends Panel implements ISearchPanel {
     this._queryBar = new Panel();
     this._queryBar.addClass(`${CSS_PREFIX}-queryBar`);
 
+    // Section header — matches Pages / Backlinks style
+    const header = document.createElement('div');
+    header.className = `${CSS_PREFIX}-header`;
+    header.textContent = 'Search';
+
     // Search input
     this._searchInput = document.createElement('input');
     this._searchInput.className = `${CSS_PREFIX}-input`;
@@ -247,6 +252,7 @@ export class SearchPanel extends Panel implements ISearchPanel {
     barContainer.appendChild(this._searchInput);
     barContainer.appendChild(this._searchBtn);
 
+    this._queryBar.node.appendChild(header);
     this._queryBar.node.appendChild(barContainer);
   }
 
