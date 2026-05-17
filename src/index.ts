@@ -7,6 +7,10 @@ import { Panel, PanelLayout } from '@lumino/widgets';
 
 import { MainAreaWidget } from '@jupyterlab/apputils';
 
+import { PageConfig } from '@jupyterlab/coreutils';
+
+import { IFileBrowserFactory } from '@jupyterlab/filebrowser';
+
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
 import { listWikis } from './wikiApi';
@@ -53,7 +57,11 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
     'An extension for displaying and editing wikis within JupyterLab.',
   autoStart: true,
   provides: IWikiBrowser,
-  activate: async (app: JupyterFrontEnd): Promise<IWikiBrowser> => {
+  optional: [IFileBrowserFactory],
+  activate: async (
+    app: JupyterFrontEnd,
+    fileBrowserFactory: IFileBrowserFactory | null
+  ): Promise<IWikiBrowser> => {
     const serverSettings = app.serviceManager.serverSettings;
 
     // ── Register all commands ──────────────────────────────────────────────
@@ -85,6 +93,17 @@ const plugin: JupyterFrontEndPlugin<IWikiBrowser> = {
 
     const browser = new WikiBrowser();
     browser.serverSettings = serverSettings;
+
+    // ── Default wiki path = current file browser directory ────────────
+    const serverRoot =
+      PageConfig.getOption('serverRoot') ||
+      PageConfig.getOption('rootDir') ||
+      '';
+    const currentRelPath =
+      fileBrowserFactory?.tracker.currentWidget?.model.path || '';
+    browser.defaultWikiPath = currentRelPath
+      ? `${serverRoot}/${currentRelPath}`
+      : serverRoot;
 
     // ── Reload wikis after registration ───────────────────────────────────
 

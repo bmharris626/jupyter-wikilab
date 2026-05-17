@@ -219,14 +219,15 @@ describe('WikiEditor', () => {
 
   // ── markDirty ─────────────────────────────────────────────────────────
 
-  it('markDirty shows asterisk on save button', () => {
+  it('markDirty adds dirty class to save button', () => {
     const editor = createFixture();
     editor.setPage('my-wiki', 'my-page');
     editor.markDirty();
     const saveBtn = editor.node.querySelector(
       '.jp-WikiEditor-saveBtn'
     ) as HTMLButtonElement;
-    expect(saveBtn?.textContent).toBe('Save *');
+    expect(saveBtn?.classList.contains('jp-WikiEditor-saveBtn--dirty')).toBe(true);
+    expect(saveBtn?.textContent).toBe('Save');
   });
 
   it('setContent triggers markDirty via contentChanged', () => {
@@ -237,7 +238,7 @@ describe('WikiEditor', () => {
       '.jp-WikiEditor-saveBtn'
     ) as HTMLButtonElement;
     // setContent should trigger _onContentChanged → markDirty
-    expect(saveBtn?.textContent).toBe('Save *');
+    expect(saveBtn?.classList.contains('jp-WikiEditor-saveBtn--dirty')).toBe(true);
   });
 
   // ── Save button elements ──────────────────────────────────────────────
@@ -272,7 +273,7 @@ describe('WikiEditor', () => {
     let saveBtn = editor.node.querySelector(
       '.jp-WikiEditor-saveBtn'
     ) as HTMLButtonElement;
-    expect(saveBtn?.textContent).toBe('Save *');
+    expect(saveBtn?.classList.contains('jp-WikiEditor-saveBtn--dirty')).toBe(true);
 
     // Simulate save
     await editor.save();
@@ -288,7 +289,7 @@ describe('WikiEditor', () => {
     saveBtn = editor.node.querySelector(
       '.jp-WikiEditor-saveBtn'
     ) as HTMLButtonElement;
-    expect(saveBtn?.textContent).toBe('Save');
+    expect(saveBtn?.classList.contains('jp-WikiEditor-saveBtn--dirty')).toBe(false);
   });
 
   it('save() returns true on success', async () => {

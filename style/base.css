@@ -469,22 +469,36 @@
 
 .jp-WikiEditor-saveBtn {
   flex: 0 0 auto;
-  padding: 2px 10px;
-  font-size: var(--jp-ui-font-size0);
-  border: 1px solid var(--md-border-color);
-  border-radius: 3px;
-  background: var(--jp-layout-color1);
-  color: var(--jp-ui-font-color0);
+  padding: 4px 14px;
+  font-size: var(--jp-ui-font-size1);
+  font-weight: 600;
+  border: 1px solid var(--jp-brand-color1);
+  border-radius: 4px;
+  background: var(--jp-brand-color1);
+  color: white;
   cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
 }
 
 .jp-WikiEditor-saveBtn:hover:not(:disabled) {
-  background: var(--jp-layout-color2);
+  background: var(--jp-brand-color0);
+  border-color: var(--jp-brand-color0);
 }
 
 .jp-WikiEditor-saveBtn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
+}
+
+.jp-WikiEditor-saveBtn--dirty {
+  background: var(--jp-warn-color1, #f57c00);
+  border-color: var(--jp-warn-color1, #f57c00);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--jp-warn-color1, #f57c00) 30%, transparent);
+}
+
+.jp-WikiEditor-saveBtn--dirty:hover:not(:disabled) {
+  background: var(--jp-warn-color0, #e65100);
+  border-color: var(--jp-warn-color0, #e65100);
 }
 
 .jp-WikiEditor-saveStatus {

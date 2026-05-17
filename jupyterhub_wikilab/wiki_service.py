@@ -162,8 +162,11 @@ def list_pages(wiki_id: str) -> List[Dict[str, Any]]:
     for md_file in sorted(wiki_path.rglob("*.md")):
         if md_file.name == "_sidebar.md":
             continue
-
+        # Skip files inside hidden directories (e.g. .ipynb_checkpoints)
         rel = md_file.relative_to(wiki_path)
+        if any(part.startswith(".") for part in rel.parts[:-1]):
+            continue
+
         # Always use forward slashes regardless of OS
         slug = str(rel).replace("\\", "/")[: -len(".md")]
         title = md_file.stem.replace("-", " ").title()

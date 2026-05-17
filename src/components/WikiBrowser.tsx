@@ -273,15 +273,25 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       if (!this._serverSettings) {
         return;
       }
-      void openRegisterWikiDialog(this._serverSettings, () => {
-        if (this.onWikiRegistered) {
-          this.onWikiRegistered();
-        }
-      });
+      void openRegisterWikiDialog(
+        this._serverSettings,
+        () => {
+          if (this.onWikiRegistered) {
+            this.onWikiRegistered();
+          }
+        },
+        this._defaultWikiPath
+      );
     };
   }
 
+  /** Default filesystem path pre-populated in the new-wiki dialog. */
+  set defaultWikiPath(path: string) {
+    this._defaultWikiPath = path;
+  }
+
   private _serverSettings: ServerConnection.ISettings | null = null;
+  private _defaultWikiPath: string = '';
   private _pages: PageEntry[] = [];
   /** Most recently loaded page content (set by loadPage). */
   _lastLoadedContent: string = '';

@@ -104,11 +104,12 @@ export namespace CommandArguments {
  */
 export async function openRegisterWikiDialog(
   serverSettings: ServerConnection.ISettings,
-  onRegistered: () => void
+  onRegistered: () => void,
+  defaultPath?: string
 ): Promise<void> {
   console.log('[wikilab] openRegisterWikiDialog called');
   try {
-    const body = new RegisterWikiBody();
+    const body = new RegisterWikiBody(defaultPath);
     const result = await showDialog({
       title: 'Register New Wiki',
       body,
@@ -163,11 +164,12 @@ class RegisterWikiBody extends Widget {
   private _pathInput: HTMLInputElement;
   private _slugHint: HTMLSpanElement;
 
-  constructor() {
+  constructor(defaultPath?: string) {
     super();
     this.addClass('jp-RegisterWikiBody');
 
-    const defaultPath =
+    const resolvedDefaultPath =
+      defaultPath ||
       PageConfig.getOption('serverRoot') ||
       PageConfig.getOption('rootDir') ||
       '';
@@ -198,7 +200,7 @@ class RegisterWikiBody extends Widget {
 
     this._nameInput = nameRow.input;
     this._pathInput = pathRow.input;
-    this._pathInput.value = defaultPath;
+    this._pathInput.value = resolvedDefaultPath;
 
     // Slug hint shown below the name field
     this._slugHint = document.createElement('span');

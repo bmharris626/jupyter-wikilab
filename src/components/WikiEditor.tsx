@@ -240,9 +240,11 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
 
   private _updateSaveButton(): void {
     if (this._isDirty) {
-      this._saveBtn.textContent = 'Save *';
+      this._saveBtn.textContent = 'Save';
+      this._saveBtn.classList.add(`${CSS_PREFIX}-saveBtn--dirty`);
     } else {
       this._saveBtn.textContent = 'Save';
+      this._saveBtn.classList.remove(`${CSS_PREFIX}-saveBtn--dirty`);
     }
     this._saveStatus.textContent = '';
   }
@@ -310,7 +312,7 @@ export class WikiEditor extends SplitPanel implements IEditorPanel {
       this._updateSaveButton();
       return false;
     } finally {
-      this._saveBtn.textContent = this._isDirty ? 'Save *' : 'Save';
+      this._updateSaveButton();
       this._saveBtn.disabled = false;
     }
   }
