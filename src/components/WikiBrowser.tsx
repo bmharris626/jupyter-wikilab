@@ -812,7 +812,8 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       return;
     }
 
-    const body = new NewPageBody(Array.from(this._expandedFolders));
+    const knownFolders = Array.from(this._buildFolderMap().keys()).filter(f => f !== '');
+    const body = new NewPageBody(Array.from(this._expandedFolders), knownFolders);
     const result = await showDialog({
       title: 'New Page',
       body,
@@ -1043,7 +1044,7 @@ class NewPageBody extends Widget {
   private _folderInput: HTMLInputElement;
   private _titleInput: HTMLInputElement;
 
-  constructor(expandedFolders: string[]) {
+  constructor(expandedFolders: string[], knownFolders: string[] = []) {
     super();
     this.addClass('jp-NewPageBody');
 
@@ -1079,13 +1080,27 @@ class NewPageBody extends Widget {
 
     const folderRow = makeRow(
       'Folder (optional)',
-      'e.g. guides or guides/tutorials',
+      knownFolders.length > 0 ? 'Select or type a folder' : 'e.g. guides',
       'Leave blank to create at the root level.'
     );
     const titleRow = makeRow('Page title', 'My New Page');
 
     this._folderInput = folderRow.input;
     this._titleInput = titleRow.input;
+
+    // Wire datalist for folder suggestions if any folders already exist
+    if (knownFolders.length > 0) {
+      const listId = 'wikilab-folder-suggestions';
+      const datalist = document.createElement('datalist');
+      datalist.id = listId;
+      for (const f of knownFolders) {
+        const opt = document.createElement('option');
+        opt.value = f;
+        datalist.appendChild(opt);
+      }
+      this._folderInput.setAttribute('list', listId);
+      folderRow.row.appendChild(datalist);
+    }
 
     // Pre-populate folder from the single expanded folder
     if (expandedFolders.length === 1) {
