@@ -147,11 +147,15 @@ describe('registerCommands', () => {
     }
   });
 
-  it('registers a Ctrl+S keybinding for savePage', () => {
-    const saveBinding = registeredKeyBindings.find(
+  it('registers a Ctrl+S keybinding for savePage scoped to the wiki editor', () => {
+    const saveBindings = registeredKeyBindings.filter(
       b => b.command === CommandIDs.savePage && b.keys.includes('Ctrl+S')
     );
-    expect(saveBinding).toBeDefined();
-    expect(saveBinding?.selector).toMatch(/wikilab/);
+    expect(saveBindings.length).toBeGreaterThan(0);
+    // At least one binding must target the wiki editor widget
+    const editorBinding = saveBindings.find(
+      b => b.selector.includes('WikiEditor') || b.selector.includes('wikilab')
+    );
+    expect(editorBinding).toBeDefined();
   });
 });

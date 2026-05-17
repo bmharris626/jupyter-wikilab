@@ -1,18 +1,12 @@
 const jestJupyterLab = require('@jupyterlab/testutils/lib/jest-config');
 
-const esModules = [
-  '@codemirror',
-  '@jupyter/ydoc',
-  '@jupyterlab/',
-  'lib0',
-  'nanoid',
-  'vscode-ws-jsonrpc',
-  'y-protocols',
-  'y-websocket',
-  'yjs'
-].join('|');
-
 const baseConfig = jestJupyterLab(__dirname);
+
+// Extend the base pattern to also transform @jupyterlab/* packages from source
+const basePattern = baseConfig.transformIgnorePatterns[0];
+const transformIgnorePatterns = [
+  basePattern.replace('/node_modules/(?!', '/node_modules/(?!@jupyterlab/|')
+];
 
 module.exports = {
   ...baseConfig,
@@ -24,5 +18,5 @@ module.exports = {
   ],
   coverageReporters: ['lcov', 'text'],
   testRegex: 'src/.*/.*.spec.ts[x]?$',
-  transformIgnorePatterns: [`/node_modules/(?!${esModules}).+`]
+  transformIgnorePatterns
 };

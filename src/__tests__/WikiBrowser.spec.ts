@@ -55,8 +55,8 @@ describe('WikiBrowser', () => {
     expect(browser.hasClass('jp-WikiBrowser')).toBe(true);
   });
 
-  it('should have a toolbar, page panel, and backlinks panel as children', () => {
-    expect(browser.widgets.length).toBe(3);
+  it('should have a toolbar, search panel, page panel, and backlinks panel as children', () => {
+    expect(browser.widgets.length).toBe(4);
   });
 
   it('should start with an empty active wiki selection', () => {
@@ -339,7 +339,7 @@ describe('WikiBrowser', () => {
   // ── Backlinks ──────────────────────────────────────────────────────────
 
   it('should have a backlinks panel as a child widget', () => {
-    const backlinksPanel = browser.widgets[2] as any;
+    const backlinksPanel = browser.widgets[3] as any;
     expect(backlinksPanel).toBeTruthy();
     expect(backlinksPanel.hasClass('jp-WikiBrowser-backlinksPanel')).toBe(true);
   });
