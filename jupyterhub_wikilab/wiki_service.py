@@ -145,33 +145,33 @@ def get_page_path(wiki_path: Path, slug: str) -> Path:
 
 def list_pages(wiki_id: str) -> List[Dict[str, Any]]:
     """
-    List all pages in a wiki.
+    List all pages in a wiki, including pages inside subdirectories.
 
     Args:
         wiki_id: The wiki ID
 
     Returns:
-        List of page metadata
+        List of page metadata; slugs use forward-slash separators for nested pages
+        (e.g. ``"guides/setup"`` for ``wiki_path/guides/setup.md``).
     """
     wiki_path = get_wiki_path(wiki_id)
     if not wiki_path:
         return []
 
     pages = []
-    # Look for .md files in the wiki directory
-    for md_file in wiki_path.glob("*.md"):
+    for md_file in sorted(wiki_path.rglob("*.md")):
         if md_file.name == "_sidebar.md":
-            continue  # Skip sidebar file for now
+            continue
 
-        # Get page title from filename
+        rel = md_file.relative_to(wiki_path)
+        # Always use forward slashes regardless of OS
+        slug = str(rel).replace("\\", "/")[: -len(".md")]
         title = md_file.stem.replace("-", " ").title()
-        # Get last modified time
         mtime = datetime.fromtimestamp(md_file.stat().st_mtime)
 
-        pages.append({"slug": md_file.stem, "title": title, "mtime": mtime.isoformat()})
+        pages.append({"slug": slug, "title": title, "mtime": mtime.isoformat()})
 
-    # Sort by title
-    pages.sort(key=lambda x: x["title"])
+    pages.sort(key=lambda x: x["slug"])
     return pages
 
 
@@ -303,6 +303,7 @@ def create_page(
     title: str,
     content: str,
     user: Optional[str] = None,
+    folder: Optional[str] = None,
 ) -> Optional[str]:
     """
     Create a new page in a wiki and auto-commit it to git.
@@ -312,6 +313,10 @@ def create_page(
         title: Page title
         content: Page content
         user: Username for the git committer (defaults to ``JUPYTERHUB_USER``).
+        folder: Optional relative folder path (e.g. ``"guides"`` or
+                ``"guides/tutorials"``).  The page is created inside this
+                subdirectory.  Forward slashes only; must not start or end
+                with a slash.
 
     Returns:
         Slug of created page or None if failed
@@ -320,7 +325,12 @@ def create_page(
     if not wiki_path:
         return None
 
-    slug = slugify(title)
+    name_slug = slugify(title)
+    if folder:
+        clean_folder = folder.strip("/").replace("\\", "/")
+        slug = f"{clean_folder}/{name_slug}"
+    else:
+        slug = name_slug
     page_path = get_page_path(wiki_path, slug)
 
     try:
@@ -410,8 +420,13 @@ def rename_page(
     if not wiki_path:
         return False
 
-    # Convert new title to slug
-    new_slug = slugify(new_title)
+    # Preserve folder prefix: only the filename component is re-slugified.
+    name_slug = slugify(new_title)
+    if "/" in slug:
+        folder_prefix = slug.rsplit("/", 1)[0]
+        new_slug = f"{folder_prefix}/{name_slug}"
+    else:
+        new_slug = name_slug
 
     old_page = f"{slug}.md"
     new_page = f"{new_slug}.md"

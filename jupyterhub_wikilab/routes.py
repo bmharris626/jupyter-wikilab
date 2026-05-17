@@ -208,11 +208,12 @@ class WikiPageCreateHandler(APIHandler):
             )
             return
 
+        folder = body.get("folder") or None
         user = getattr(self.current_user, "name", None)
 
         lock = _get_wiki_lock(wiki_id)
         async with lock:
-            slug = create_page(wiki_id, title, content, user=user)
+            slug = create_page(wiki_id, title, content, user=user, folder=folder)
         if slug:
             self.finish(
                 json.dumps({"slug": slug, "message": "Page created successfully"})

@@ -70,6 +70,8 @@ export interface PageSaveRequest {
 export interface PageCreateRequest {
   title: string;
   content: string;
+  /** Optional folder path (e.g. "guides" or "guides/tutorials"). */
+  folder?: string;
   /** Optional committer email (from user settings). */
   committer_email?: string;
 }

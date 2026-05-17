@@ -467,6 +467,9 @@ def rename_wiki_page(
         if not old_path.exists():
             return False
 
+        # Ensure the destination directory exists (needed for subdirectory moves)
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+
         # Determine if the old file is already tracked in git
         tracked = str(old_path) in {k[0] for k in repo.index.entries.keys()}
 

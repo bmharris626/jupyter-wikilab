@@ -20,6 +20,8 @@
 
 import { Panel, PanelLayout } from '@lumino/widgets';
 
+import { Widget } from '@lumino/widgets';
+
 import { ServerConnection } from '@jupyterlab/services';
 
 import { InputDialog, showDialog, Dialog } from '@jupyterlab/apputils';
@@ -478,6 +480,11 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._backlinksPanel.node.appendChild(this._backlinksList);
   }
 
+  // ── Folder expand/collapse state ──────────────────────────────────────────
+
+  /** Set of folder paths currently expanded in the page tree. */
+  private _expandedFolders = new Set<string>();
+
   private _clearPageList(): void {
     this._pageList.innerHTML = '';
   }
@@ -486,6 +493,70 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
     this._placeholder.textContent = text;
     this._placeholder.style.display = 'block';
     this._clearPageList();
+  }
+
+  /**
+   * Build a folder → pages map from the flat page list.
+   * Root-level pages (no folder) are stored under the key ''.
+   */
+  private _buildFolderMap(): Map<string, PageEntry[]> {
+    const map = new Map<string, PageEntry[]>();
+    map.set('', []);
+    for (const page of this._pages) {
+      const slashIdx = page.slug.lastIndexOf('/');
+      const folder = slashIdx === -1 ? '' : page.slug.substring(0, slashIdx);
+      if (!map.has(folder)) {
+        map.set(folder, []);
+      }
+      map.get(folder)!.push(page);
+    }
+    return map;
+  }
+
+  /** Append a page <li> to the given parent list element. */
+  private _appendPageItem(
+    parent: HTMLElement,
+    page: PageEntry,
+    indent = false
+  ): void {
+    const li = document.createElement('li');
+    li.className = `${CSS_PREFIX}-pageItem`;
+    li.setAttribute('role', 'listitem');
+
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = `${CSS_PREFIX}-pageLink`;
+    if (indent) {
+      link.classList.add(`${CSS_PREFIX}-pageLinkIndented`);
+    }
+    link.textContent = page.title || page.slug.split('/').pop()!;
+    link.setAttribute('data-slug', page.slug);
+    link.setAttribute('title', `Open ${page.title || page.slug}`);
+
+    link.addEventListener('click', async (event: MouseEvent) => {
+      event.preventDefault();
+      try {
+        this._lastLoadedContent = await this.loadPage(page.slug);
+        this._emitPageSelected(page.slug, page.title);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        this._showPlaceholder(`Failed to load "${page.slug}": ${message}`);
+      }
+    });
+
+    const renameBtn = document.createElement('button');
+    renameBtn.className = `${CSS_PREFIX}-pageActionBtn`;
+    renameBtn.textContent = '✎';
+    renameBtn.setAttribute('title', `Rename "${page.title || page.slug}"`);
+    renameBtn.addEventListener('click', async (event: MouseEvent) => {
+      event.stopPropagation();
+      event.preventDefault();
+      await this._handleRenamePage(page);
+    });
+
+    li.appendChild(link);
+    li.appendChild(renameBtn);
+    parent.appendChild(li);
   }
 
   private _renderPageList(): void {
@@ -497,43 +568,79 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       return;
     }
 
-    for (const page of this._pages) {
-      const li = document.createElement('li');
-      li.className = `${CSS_PREFIX}-pageItem`;
-      li.setAttribute('role', 'listitem');
+    const folderMap = this._buildFolderMap();
+    const rootPages = folderMap.get('') ?? [];
 
-      const link = document.createElement('a');
-      link.href = '#';
-      link.className = `${CSS_PREFIX}-pageLink`;
-      link.textContent = page.title || page.slug;
-      link.setAttribute('data-slug', page.slug);
-      link.setAttribute('title', `Open ${page.title || page.slug}`);
+    // ── Root-level pages ───────────────────────────────────────────────────
+    for (const page of rootPages) {
+      this._appendPageItem(this._pageList, page, false);
+    }
 
-      link.addEventListener('click', async (event: MouseEvent) => {
-        event.preventDefault();
-        try {
-          this._lastLoadedContent = await this.loadPage(page.slug);
-          this._emitPageSelected(page.slug, page.title);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          this._showPlaceholder(`Failed to load "${page.slug}": ${message}`);
+    // ── Folder groups ──────────────────────────────────────────────────────
+    const folders = Array.from(folderMap.keys())
+      .filter(k => k !== '')
+      .sort();
+
+    for (const folder of folders) {
+      const pages = folderMap.get(folder)!;
+      const isExpanded = this._expandedFolders.has(folder);
+
+      // Folder header row
+      const folderLi = document.createElement('li');
+      folderLi.className = `${CSS_PREFIX}-folderItem`;
+      folderLi.setAttribute('role', 'listitem');
+
+      const folderBtn = document.createElement('button');
+      folderBtn.className = `${CSS_PREFIX}-folderBtn`;
+      folderBtn.setAttribute('aria-expanded', String(isExpanded));
+      folderBtn.setAttribute('title', isExpanded ? `Collapse ${folder}` : `Expand ${folder}`);
+
+      const arrow = document.createElement('span');
+      arrow.className = `${CSS_PREFIX}-folderArrow`;
+      arrow.textContent = isExpanded ? '▾' : '▸';
+
+      const label = document.createElement('span');
+      label.className = `${CSS_PREFIX}-folderLabel`;
+      label.textContent = `${folder}/`;
+
+      const count = document.createElement('span');
+      count.className = `${CSS_PREFIX}-folderCount`;
+      count.textContent = String(pages.length);
+
+      folderBtn.appendChild(arrow);
+      folderBtn.appendChild(label);
+      folderBtn.appendChild(count);
+      folderLi.appendChild(folderBtn);
+      this._pageList.appendChild(folderLi);
+
+      // Nested page list
+      const subList = document.createElement('ul');
+      subList.className = `${CSS_PREFIX}-folderPages`;
+      subList.setAttribute('role', 'list');
+      subList.style.display = isExpanded ? '' : 'none';
+
+      for (const page of pages) {
+        this._appendPageItem(subList, page, true);
+      }
+
+      this._pageList.appendChild(subList);
+
+      folderBtn.addEventListener('click', () => {
+        const expanded = this._expandedFolders.has(folder);
+        if (expanded) {
+          this._expandedFolders.delete(folder);
+          arrow.textContent = '▸';
+          folderBtn.setAttribute('aria-expanded', 'false');
+          folderBtn.setAttribute('title', `Expand ${folder}`);
+          subList.style.display = 'none';
+        } else {
+          this._expandedFolders.add(folder);
+          arrow.textContent = '▾';
+          folderBtn.setAttribute('aria-expanded', 'true');
+          folderBtn.setAttribute('title', `Collapse ${folder}`);
+          subList.style.display = '';
         }
       });
-
-      // Rename action button — revealed on hover via CSS
-      const renameBtn = document.createElement('button');
-      renameBtn.className = `${CSS_PREFIX}-pageActionBtn`;
-      renameBtn.textContent = '✎';
-      renameBtn.setAttribute('title', `Rename "${page.title || page.slug}"`);
-      renameBtn.addEventListener('click', async (event: MouseEvent) => {
-        event.stopPropagation();
-        event.preventDefault();
-        await this._handleRenamePage(page);
-      });
-
-      li.appendChild(link);
-      li.appendChild(renameBtn);
-      this._pageList.appendChild(li);
     }
   }
 
@@ -683,26 +790,37 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       return;
     }
 
-    const result = await InputDialog.getText({
+    const body = new NewPageBody(Array.from(this._expandedFolders));
+    const result = await showDialog({
       title: 'New Page',
-      label: 'Page title',
-      placeholder: 'My New Page',
-      okLabel: 'Create'
+      body,
+      focusNodeSelector: 'input',
+      buttons: [
+        Dialog.cancelButton(),
+        Dialog.okButton({ label: 'Create' })
+      ]
     });
 
-    if (!result.button.accept || !result.value?.trim()) {
+    if (!result.button.accept) {
       return;
     }
 
-    const title = result.value.trim();
+    const { title, folder } = body.getValue();
+    if (!title) {
+      return;
+    }
+
     try {
       const response = await createPage(
         wikiId,
-        { title, content: `# ${title}\n\n` },
+        { title, content: `# ${title}\n\n`, folder: folder || undefined },
         this._serverSettings
       );
+      // Auto-expand the folder when a page is created inside one
+      if (folder) {
+        this._expandedFolders.add(folder.trim().replace(/^\/|\/$/g, ''));
+      }
       await this.loadPages();
-      // Open the new page in the editor
       this._lastLoadedContent = await this.loadPage(response.slug);
       this._emitPageSelected(response.slug, title);
     } catch (err) {
@@ -733,11 +851,14 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       return;
     }
 
-    const newSlug = newTitle
+    const nameSlug = newTitle
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
+    const slashIdx = page.slug.lastIndexOf('/');
+    const newSlug =
+      slashIdx === -1 ? nameSlug : `${page.slug.substring(0, slashIdx)}/${nameSlug}`;
 
     try {
       await renamePage(
@@ -886,5 +1007,77 @@ export class WikiBrowser extends Panel implements IBrowserPanel {
       this._pushBtn.textContent = '↑ Push';
       this._renderGitStatus();
     }
+  }
+}
+
+// ── NewPageBody ─────────────────────────────────────────────────────────────
+
+/**
+ * Two-field dialog body for creating a new page.
+ * Shows an optional folder path input (pre-populated from the currently
+ * expanded folder if there is exactly one) and a required title input.
+ */
+class NewPageBody extends Widget {
+  private _folderInput: HTMLInputElement;
+  private _titleInput: HTMLInputElement;
+
+  constructor(expandedFolders: string[]) {
+    super();
+    this.addClass('jp-NewPageBody');
+
+    const makeRow = (
+      labelText: string,
+      placeholder: string,
+      hint?: string
+    ): { row: HTMLDivElement; input: HTMLInputElement } => {
+      const row = document.createElement('div');
+      row.className = 'jp-NewPageBody-row';
+
+      const label = document.createElement('label');
+      label.className = 'jp-NewPageBody-label';
+      label.textContent = labelText;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'jp-mod-styled jp-NewPageBody-input';
+      input.placeholder = placeholder;
+
+      row.appendChild(label);
+      row.appendChild(input);
+
+      if (hint) {
+        const hintEl = document.createElement('span');
+        hintEl.className = 'jp-NewPageBody-hint';
+        hintEl.textContent = hint;
+        row.appendChild(hintEl);
+      }
+
+      return { row, input };
+    };
+
+    const folderRow = makeRow(
+      'Folder (optional)',
+      'e.g. guides or guides/tutorials',
+      'Leave blank to create at the root level.'
+    );
+    const titleRow = makeRow('Page title', 'My New Page');
+
+    this._folderInput = folderRow.input;
+    this._titleInput = titleRow.input;
+
+    // Pre-populate folder from the single expanded folder
+    if (expandedFolders.length === 1) {
+      this._folderInput.value = expandedFolders[0];
+    }
+
+    this.node.appendChild(folderRow.row);
+    this.node.appendChild(titleRow.row);
+  }
+
+  getValue(): { title: string; folder: string } {
+    return {
+      title: this._titleInput.value.trim(),
+      folder: this._folderInput.value.trim().replace(/^\/|\/$/g, '')
+    };
   }
 }

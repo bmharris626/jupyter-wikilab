@@ -224,6 +224,101 @@
   font-style: italic;
 }
 
+/* ── Folder tree items ──────────────────────────────────────────────────── */
+
+.jp-WikiBrowser-folderItem {
+  list-style: none;
+  border-bottom: none;
+}
+
+.jp-WikiBrowser-folderBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--jp-ui-font-color1);
+  font-size: var(--jp-ui-font-size1);
+  font-family: var(--jp-ui-font-family);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.jp-WikiBrowser-folderBtn:hover {
+  background: var(--jp-layout-color2);
+}
+
+.jp-WikiBrowser-folderArrow {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--jp-ui-font-color2);
+  width: 12px;
+}
+
+.jp-WikiBrowser-folderLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--jp-mono-font-family);
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color2);
+}
+
+.jp-WikiBrowser-folderCount {
+  flex: 0 0 auto;
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color3);
+  font-weight: normal;
+}
+
+.jp-WikiBrowser-folderPages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.jp-WikiBrowser-pageLinkIndented {
+  padding-left: 28px;
+}
+
+/* ── NewPage dialog body ─────────────────────────────────────────────────── */
+
+.jp-NewPageBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 4px;
+  min-width: 340px;
+}
+
+.jp-NewPageBody-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jp-NewPageBody-label {
+  font-size: var(--jp-ui-font-size1);
+  font-weight: 600;
+  color: var(--jp-ui-font-color0);
+}
+
+.jp-NewPageBody-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.jp-NewPageBody-hint {
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color2);
+}
+
 /* ── Editor formatting toolbar ──────────────────────────────────────────── */
 
 .jp-WikiEditor-editorHost {
