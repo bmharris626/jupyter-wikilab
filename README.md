@@ -1,168 +1,87 @@
 # jupyter-wikilab
 
-[![Github Actions Status](https://github.com/bmharris626/jupyter-wikilab/workflows/Build/badge.svg)](https://github.com/bmharris626/jupyter-wikilab/actions/workflows/build.yml)
+[![GitHub Actions Status](https://github.com/bmharris626/jupyter-wikilab/workflows/Build/badge.svg)](https://github.com/bmharris626/jupyter-wikilab/actions/workflows/build.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
 
-A JupyterLab 4.x extension that turns any local git repository into a wiki — letting you author, search, and track documentation without leaving your JupyterHub workspace. Each page is a Markdown file committed directly to git, giving you full portability and GitLab compatibility with no external services required.
+A JupyterLab 4.x extension that turns any local git repository into a wiki — letting you author, search, and track documentation without leaving your JupyterHub workspace.
 
----
+## Description
 
-## Features
+Each wiki page is a Markdown file committed directly to git, giving full portability and GitLab compatibility with no external services. Features include multi-wiki support, split editor with live preview, conflict detection with three-way diff, full page history via git log, backlinks, and full-text search powered by `git grep`.
 
-- **Multiple wikis** — register any number of named wikis, each backed by its own git repository
-- **Page management** — create, read, update, delete, and rename wiki pages from the sidebar
-- **Auto-commit on save** — every save triggers a `git commit` using your JupyterHub username as the author identity
-- **Conflict detection** — stale-write detection on every save; a three-way diff view surfaces conflicts when two users edit the same page simultaneously
-- **Full page history** — git log per page with content at any past commit
-- **Backlinks** — see which pages link to the current page (powered by `git grep`)
-- **Full-text search** — case-insensitive `git grep` across all pages with line-level excerpts
-- **Split editor** — CodeMirror 6 editor (left) with live Markdown preview (right); wiki links `[[Page Name]]` are rendered as clickable navigations
-- **Sidebar** — wiki selector, page tree, search input, git ahead/behind indicator, Push/Pull buttons
-- **Settings** — configurable committer email and default wiki path
-
----
-
-## Requirements
-
-- JupyterLab >= 4.0.0
-- Python >= 3.10
-- [GitPython](https://gitpython.readthedocs.io/) (`pip install gitpython`)
-
-> **Note:** `gitpython` is a runtime dependency but is not yet declared in the package metadata. Install it explicitly until [this is fixed](https://github.com/bmharris626/jupyter-wikilab/issues).
-
----
-
-## Install
+## Quick Start
 
 ```bash
 pip install gitpython jupyterhub_wikilab
 ```
 
----
+Open JupyterLab, open the **WikiLab** panel from the sidebar, click **+** to register a wiki (name + path to a git repo), then create and edit pages with `Ctrl+S` to save and auto-commit.
 
-## Uninstall
+## Installation & Setup
+
+### From PyPI
+
+```bash
+pip install gitpython jupyterhub_wikilab
+```
+
+### Uninstall
 
 ```bash
 pip uninstall jupyterhub_wikilab
 ```
-
----
-
-## Settings
-
-Settings are accessible via **Settings → Advanced Settings Editor → WikiLab**.
-
-| Setting | Default | Description |
-|---|---|---|
-| `committerEmail` | `{username}@wikilab` | Email used for git commits. Set to your real email to match GitLab/GitHub commit history. |
-| `defaultWikiPath` | `./wikis` | Suggested path when registering a new wiki. |
-
----
-
-## Usage
-
-1. Open the **WikiLab** panel from the left sidebar.
-2. Click **+** to register a wiki — provide a name and the path to a local directory (it will be initialised as a git repo if it isn't one already).
-3. Select a page from the page list to open it in the split editor.
-4. Edit Markdown on the left; the preview updates on the right.
-5. Press **Ctrl+S** (or the Save button) to save and auto-commit.
-6. Use the **History** toolbar button to browse past commits for the current page.
-7. Use the search box in the sidebar for full-text search across all pages.
-8. Use **Push** / **Pull** buttons to sync with a remote (if configured).
-
-### Wiki links
-
-Use `[[Page Name]]` syntax to link between pages. Links are rendered as clickable anchors in the preview and navigate within JupyterLab.
-
-### Conflict resolution
-
-If another user saves the same page between when you opened it and when you save, a three-way diff view appears showing:
-- **Base** — the content when you started editing
-- **Theirs** — the current committed version
-- **Yours** — your unsaved edits
-
-Accept theirs or keep yours to resolve the conflict.
-
----
-
-## Troubleshoot
-
-If you see the frontend extension but it is not working, check that the server extension is enabled:
-
-```bash
-jupyter server extension list
-```
-
-If the server extension is installed and enabled but you do not see the frontend extension:
-
-```bash
-jupyter labextension list
-```
-
----
-
-## Contributing
 
 ### Development install
 
-Note: You will need NodeJS to build the extension package.
-
-The `jlpm` command is JupyterLab's pinned version of [yarn](https://yarnpkg.com/). You may use `yarn` or `npm` in place of `jlpm` below.
-
 ```bash
-# Clone the repo
-# cd into the project directory
-
-# Set up a virtual environment and install in development mode
-python -m venv .venv
-source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install gitpython
 pip install --editable ".[dev,test]"
-
-# Link the development version of the extension with JupyterLab
 jupyter labextension develop . --overwrite
-# Enable the server extension manually in develop mode
 jupyter server extension enable jupyterhub_wikilab
-
-# Build the TypeScript source
 jlpm build
 ```
 
-To watch the source directory and rebuild automatically:
+To watch and auto-rebuild:
 
 ```bash
-# Terminal 1 — watch and rebuild TypeScript
-jlpm watch
-
-# Terminal 2 — run JupyterLab
-jupyter lab
+jlpm watch          # Terminal 1
+jupyter lab         # Terminal 2
 ```
 
-Refresh JupyterLab after each rebuild to pick up changes.
+## Usage
 
-To generate source maps for JupyterLab core extensions as well:
+### Basic Workflow
 
-```bash
-jupyter lab build --minimize=False
-```
+1. Open the **WikiLab** panel from the left sidebar.
+2. Click **+** to register a wiki — provide a name and path (auto-initialised as git repo if needed).
+3. Select a page from the page list to open it in the split editor.
+4. Edit Markdown on the left; live preview updates on the right.
+5. Press **Ctrl+S** (or Save button) to save and auto-commit.
+6. Use **History** toolbar button to browse past commits for the current page.
+7. Use the search box for full-text search across all pages.
+8. Use **Push / Pull** buttons to sync with a remote.
 
-### Development uninstall
+### Wiki Links
 
-```bash
-jupyter server extension disable jupyterhub_wikilab
-pip uninstall jupyterhub_wikilab
-```
+Use `[[Page Name]]` syntax to link between pages. Links are rendered as clickable anchors in the preview.
 
-Also remove the symlink created by `jupyter labextension develop`:
+### Conflict Resolution
 
-```bash
-# Find the labextensions folder
-jupyter labextension list
-# Remove the symlink named jupyterhub-wikilab inside that folder
-```
+If another user saves the same page between when you opened it and when you save, a three-way diff view appears showing **Base** (content when you started), **Theirs** (current committed version), and **Yours** (your unsaved edits). Accept theirs or keep yours.
 
-### Testing
+### Settings
 
-#### Server tests (pytest)
+Open **Settings → Advanced Settings Editor → WikiLab** to configure:
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `committerEmail` | str | `{username}@wikilab` | Email used for git commits |
+| `defaultWikiPath` | str | `./wikis` | Suggested path when registering a new wiki |
+
+## Contributing
+
+### Server tests (pytest)
 
 ```bash
 pip install -e ".[test]"
@@ -170,25 +89,69 @@ jupyter labextension develop . --overwrite
 pytest -vv -r ap --cov jupyterhub_wikilab
 ```
 
-#### Frontend tests (Jest)
+### Frontend tests (Jest)
 
 ```bash
 jlpm
 jlpm test
 ```
 
-#### Integration tests (Playwright / Galata)
+### Integration tests (Playwright / Galata)
 
-See [ui-tests/README.md](./ui-tests/README.md) for setup and run instructions.
+Build first, then:
 
----
+```bash
+cd ui-tests && jlpm install && jlpm playwright test
+```
 
-## AI Coding Assistant Support
+See [ui-tests/README.md](./ui-tests/README.md) for full setup.
 
-This project includes an `AGENTS.md` file with coding standards and best practices for JupyterLab extension development following the [AGENTS.md standard](https://agents.md) for cross-tool compatibility.
+## Project Structure
 
----
+```
+jupyterhub_wikilab/                  # Python server extension
+├── __init__.py                      # Extension registration
+├── _version.py                      # Auto-generated from package.json
+├── routes.py                        # REST API handlers
+├── git_service.py                   # Git operations (commit, log, grep, etc.)
+├── wiki_service.py                  # Wiki CRUD, rename, history
+├── labextension/                    # Built JS bundle
+└── tests/                           # Python unit tests
+src/                                 # TypeScript frontend
+├── index.ts                         # JupyterLab plugin
+├── commands.ts                      # Centralized command definitions
+├── request.ts                       # API request helper
+├── types.ts                         # TypeScript type definitions
+├── tokens.ts                        # JupyterLab tokens
+├── wikiApi.ts                       # Wiki API wrapper
+├── markdownRenderer.ts              # Markdown-it rendering
+├── typings.d.ts                     # Module declarations
+├── components/                      # React components
+└── utils/                           # Utility functions
+ui-tests/                            # Playwright integration tests
+style/                               # CSS
+├── base.css
+├── index.css
+└── index.js
+docs/                                # Additional docs
+├── quickstart.md
+└── troubleshooting.md
+checklists/                          # Implementation checklists
+schema/                              # Settings schema (committerEmail, defaultWikiPath)
+package.json
+pyproject.toml
+setup.py                             # setuptools shim
+tsconfig.json
+jest.config.js
+babel.config.js
+LICENSE
+CHANGELOG.md
+```
 
-## Packaging
+## Changelog
 
-See [RELEASE.md](RELEASE.md) for release and packaging instructions.
+See [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+BSD 3-Clause. See [LICENSE](LICENSE).
