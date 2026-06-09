@@ -27,7 +27,7 @@ pip install gitpython jupyterhub_wikilab
 
 ### From pre-built wheel
 
-Download the pre-built wheel from the [latest release](https://github.com/bmharris626/jupyter-wikilab/releases) and install:
+Download the wheel from `dist/jupyterhub_wikilab-0.1.0-py3-none-any.whl` in the repository and install:
 
 ```bash
 pip install gitpython
