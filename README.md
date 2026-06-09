@@ -25,6 +25,17 @@ Open JupyterLab, open the **WikiLab** panel from the sidebar, click **+** to reg
 pip install gitpython jupyterhub_wikilab
 ```
 
+### From pre-built wheel
+
+Download the pre-built wheel from the [latest release](https://github.com/bmharris626/jupyter-wikilab/releases) and install:
+
+```bash
+pip install gitpython
+pip install jupyterhub_wikilab-0.1.0-py3-none-any.whl
+```
+
+The wheel is self-contained and includes the frontend bundle — no build tools required.
+
 ### Uninstall
 
 ```bash
