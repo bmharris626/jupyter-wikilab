@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="164" failures="0" errors="0" time="9.627">
+  <testsuite name="jupyterhub-wikilab" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="4.042" tests="1">
+    <testcase classname="jupyterhub-wikilab should be tested" name="jupyterhub-wikilab should be tested" time="0.008">
+    </testcase>
+  </testsuite>
+  <testsuite name="onDirtyChange" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="4.168" tests="12">
+    <testcase classname="onDirtyChange registers beforeunload when dirty" name="onDirtyChange registers beforeunload when dirty" time="0.028">
+    </testcase>
+    <testcase classname="onDirtyChange removes previous handler and does not add a new one when not dirty" name="onDirtyChange removes previous handler and does not add a new one when not dirty" time="0.008">
+    </testcase>
+    <testcase classname="onDirtyChange toggles listener when dirty state changes" name="onDirtyChange toggles listener when dirty state changes" time="0.002">
+    </testcase>
+    <testcase classname="onDirtyChange stores handler reference on window for later removal" name="onDirtyChange stores handler reference on window for later removal" time="0.009">
+    </testcase>
+    <testcase classname="onDirtyChange clears handler reference when editor becomes clean" name="onDirtyChange clears handler reference when editor becomes clean" time="0.006">
+    </testcase>
+    <testcase classname="onDirtyChange invokes preventDefault and sets returnValue on the event" name="onDirtyChange invokes preventDefault and sets returnValue on the event" time="0.001">
+    </testcase>
+    <testcase classname="handlePageSwitch switches pages immediately when not dirty" name="handlePageSwitch switches pages immediately when not dirty" time="0.013">
+    </testcase>
+    <testcase classname="handlePageSwitch prompts user and switches when user confirms save" name="handlePageSwitch prompts user and switches when user confirms save" time="0.005">
+    </testcase>
+    <testcase classname="handlePageSwitch does not switch when user cancels the prompt" name="handlePageSwitch does not switch when user cancels the prompt" time="0.012">
+    </testcase>
+    <testcase classname="handlePageSwitch does not switch when save fails" name="handlePageSwitch does not switch when save fails" time="0.002">
+    </testcase>
+    <testcase classname="handlePageSwitch passes content to setContent on page switch" name="handlePageSwitch passes content to setContent on page switch" time="0.006">
+    </testcase>
+    <testcase classname="handlePageSwitch uses empty string for content when not provided" name="handlePageSwitch uses empty string for content when not provided" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="schema/plugin.json" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="4.191" tests="6">
+    <testcase classname="schema/plugin.json is valid JSON" name="schema/plugin.json is valid JSON" time="0.007">
+    </testcase>
+    <testcase classname="schema/plugin.json has a title" name="schema/plugin.json has a title" time="0.001">
+    </testcase>
+    <testcase classname="schema/plugin.json has properties" name="schema/plugin.json has properties" time="0.001">
+    </testcase>
+    <testcase classname="schema/plugin.json defines committerEmail with string type and default" name="schema/plugin.json defines committerEmail with string type and default" time="0.001">
+    </testcase>
+    <testcase classname="schema/plugin.json defines defaultWikiPath with string type and default" name="schema/plugin.json defines defaultWikiPath with string type and default" time="0.002">
+    </testcase>
+    <testcase classname="schema/plugin.json disables additional properties" name="schema/plugin.json disables additional properties" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="markdownRenderer" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="4.8" tests="20">
+    <testcase classname="markdownRenderer renders plain text" name="markdownRenderer renders plain text" time="0.018">
+    </testcase>
+    <testcase classname="markdownRenderer renders headings" name="markdownRenderer renders headings" time="0.003">
+    </testcase>
+    <testcase classname="markdownRenderer renders headings with anchors" name="markdownRenderer renders headings with anchors" time="0.002">
+    </testcase>
+    <testcase classname="markdownRenderer renders bold and italic" name="markdownRenderer renders bold and italic" time="0.004">
+    </testcase>
+    <testcase classname="markdownRenderer renders unordered lists" name="markdownRenderer renders unordered lists" time="0.002">
+    </testcase>
+    <testcase classname="markdownRenderer renders ordered lists" name="markdownRenderer renders ordered lists" time="0.002">
+    </testcase>
+    <testcase classname="markdownRenderer renders fenced code blocks with syntax highlighting" name="markdownRenderer renders fenced code blocks with syntax highlighting" time="0.017">
+    </testcase>
+    <testcase classname="markdownRenderer renders a single [[Wiki Link]] as an &lt;a&gt; tag" name="markdownRenderer renders a single [[Wiki Link]] as an &lt;a&gt; tag" time="0.003">
+    </testcase>
+    <testcase classname="markdownRenderer slugifies wiki link display text to the URL fragment" name="markdownRenderer slugifies wiki link display text to the URL fragment" time="0.001">
+    </testcase>
+    <testcase classname="markdownRenderer handles multiple wiki links on the same line" name="markdownRenderer handles multiple wiki links on the same line" time="0.001">
+    </testcase>
+    <testcase classname="markdownRenderer renders wiki links with underscores in names" name="markdownRenderer renders wiki links with underscores in names" time="0.001">
+    </testcase>
+    <testcase classname="markdownRenderer renders a TOC marker" name="markdownRenderer renders a TOC marker" time="0.001">
+    </testcase>
+    <testcase classname="markdownRenderer handles malformed double brackets gracefully" name="markdownRenderer handles malformed double brackets gracefully" time="0.001">
+    </testcase>
+    <testcase classname="markdownRenderer handles unpaired closing brackets" name="markdownRenderer handles unpaired closing brackets" time="0">
+    </testcase>
+    <testcase classname="markdownRenderer handles empty wiki links" name="markdownRenderer handles empty wiki links" time="0">
+    </testcase>
+    <testcase classname="markdownRenderer handles nested-looking brackets that are actually sequential" name="markdownRenderer handles nested-looking brackets that are actually sequential" time="0.001">
+    </testcase>
+    <testcase classname="markdownRenderer handles brackets inside code blocks without converting them" name="markdownRenderer handles brackets inside code blocks without converting them" time="0.816">
+    </testcase>
+    <testcase classname="markdownRenderer handles a wiki link next to regular text without spaces" name="markdownRenderer handles a wiki link next to regular text without spaces" time="0">
+    </testcase>
+    <testcase classname="markdownRenderer renders standard markdown links alongside wiki links" name="markdownRenderer renders standard markdown links alongside wiki links" time="0.011">
+    </testcase>
+    <testcase classname="markdownRenderer produces consistent output across multiple render calls" name="markdownRenderer produces consistent output across multiple render calls" time="0.002">
+    </testcase>
+  </testsuite>
+  <testsuite name="registerCommands" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="5.518" tests="11">
+    <testcase classname="registerCommands registers the openSidebar command" name="registerCommands registers the openSidebar command" time="0.006">
+    </testcase>
+    <testcase classname="registerCommands registers the createPage command" name="registerCommands registers the createPage command" time="0.001">
+    </testcase>
+    <testcase classname="registerCommands registers the savePage command" name="registerCommands registers the savePage command" time="0.001">
+    </testcase>
+    <testcase classname="registerCommands registers the renamePage command" name="registerCommands registers the renamePage command" time="0">
+    </testcase>
+    <testcase classname="registerCommands registers the openHistory command" name="registerCommands registers the openHistory command" time="0.001">
+    </testcase>
+    <testcase classname="registerCommands registers the openSearch command" name="registerCommands registers the openSearch command" time="0.001">
+    </testcase>
+    <testcase classname="registerCommands registers the pushWiki command" name="registerCommands registers the pushWiki command" time="0">
+    </testcase>
+    <testcase classname="registerCommands registers the pullWiki command" name="registerCommands registers the pullWiki command" time="0.001">
+    </testcase>
+    <testcase classname="registerCommands all commands are enabled by default" name="registerCommands all commands are enabled by default" time="0.002">
+    </testcase>
+    <testcase classname="registerCommands all command IDs follow the wikilab namespace convention" name="registerCommands all command IDs follow the wikilab namespace convention" time="0.001">
+    </testcase>
+    <testcase classname="registerCommands registers a Ctrl+S keybinding for savePage scoped to the wiki editor" name="registerCommands registers a Ctrl+S keybinding for savePage scoped to the wiki editor" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="ConflictView" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="5.839" tests="16">
+    <testcase classname="ConflictView should be a Panel widget with the correct CSS class" name="ConflictView should be a Panel widget with the correct CSS class" time="0.024">
+    </testcase>
+    <testcase classname="ConflictView should have header, splitter, and actions as children" name="ConflictView should have header, splitter, and actions as children" time="0.006">
+    </testcase>
+    <testcase classname="ConflictView should show the conflict error in the header" name="ConflictView should show the conflict error in the header" time="0.015">
+    </testcase>
+    <testcase classname="ConflictView should render three content panes in the splitter" name="ConflictView should render three content panes in the splitter" time="0.006">
+    </testcase>
+    <testcase classname="ConflictView should display base content in the first pane" name="ConflictView should display base content in the first pane" time="0.004">
+    </testcase>
+    <testcase classname="ConflictView should display your edits in the second pane" name="ConflictView should display your edits in the second pane" time="0.003">
+    </testcase>
+    <testcase classname="ConflictView should display their content in the third pane" name="ConflictView should display their content in the third pane" time="0.003">
+    </testcase>
+    <testcase classname="ConflictView should mark your edits pane with the &quot;yours&quot; CSS class" name="ConflictView should mark your edits pane with the &quot;yours&quot; CSS class" time="0.003">
+    </testcase>
+    <testcase classname="ConflictView should mark their content pane with the &quot;theirs&quot; CSS class" name="ConflictView should mark their content pane with the &quot;theirs&quot; CSS class" time="0.003">
+    </testcase>
+    <testcase classname="ConflictView should have three action buttons" name="ConflictView should have three action buttons" time="0.005">
+    </testcase>
+    <testcase classname="ConflictView should label buttons correctly" name="ConflictView should label buttons correctly" time="0.003">
+    </testcase>
+    <testcase classname="ConflictView accept your edits button should emit editor content" name="ConflictView accept your edits button should emit editor content" time="0.006">
+    </testcase>
+    <testcase classname="ConflictView accept HEAD button should emit their content" name="ConflictView accept HEAD button should emit their content" time="0.005">
+    </testcase>
+    <testcase classname="ConflictView discard button should call onDiscard callback" name="ConflictView discard button should call onDiscard callback" time="0.007">
+    </testcase>
+    <testcase classname="ConflictView should show placeholder when base_content is missing" name="ConflictView should show placeholder when base_content is missing" time="0.005">
+    </testcase>
+    <testcase classname="ConflictView should show placeholder when their_content is missing" name="ConflictView should show placeholder when their_content is missing" time="0.005">
+    </testcase>
+  </testsuite>
+  <testsuite name="PageHistory" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="6.085" tests="19">
+    <testcase classname="PageHistory should be a Panel widget with the correct CSS class" name="PageHistory should be a Panel widget with the correct CSS class" time="0.021">
+    </testcase>
+    <testcase classname="PageHistory should have a header, table, and content panel as children" name="PageHistory should have a header, table, and content panel as children" time="0.005">
+    </testcase>
+    <testcase classname="PageHistory should start with an empty commit list" name="PageHistory should start with an empty commit list" time="0.004">
+    </testcase>
+    <testcase classname="PageHistory should start with loading set to false" name="PageHistory should start with loading set to false" time="0.001">
+    </testcase>
+    <testcase classname="PageHistory PageHistory-list should render commit entries in a table" name="PageHistory PageHistory-list should render commit entries in a table" time="0.041">
+    </testcase>
+    <testcase classname="PageHistory should show a loading placeholder while fetching history" name="PageHistory should show a loading placeholder while fetching history" time="0.004">
+    </testcase>
+    <testcase classname="PageHistory should render commit entries when history is loaded" name="PageHistory should render commit entries when history is loaded" time="0.004">
+    </testcase>
+    <testcase classname="PageHistory should show a shortened SHA in the commit list" name="PageHistory should show a shortened SHA in the commit list" time="0.005">
+    </testcase>
+    <testcase classname="PageHistory should display the commit count in the header" name="PageHistory should display the commit count in the header" time="0.005">
+    </testcase>
+    <testcase classname="PageHistory should show an empty message when no commits exist" name="PageHistory should show an empty message when no commits exist" time="0.008">
+    </testcase>
+    <testcase classname="PageHistory should show the correct table column headers" name="PageHistory should show the correct table column headers" time="0.004">
+    </testcase>
+    <testcase classname="PageHistory should handle API errors gracefully" name="PageHistory should handle API errors gracefully" time="0.003">
+    </testcase>
+    <testcase classname="PageHistory should not load history when no wiki ID is provided" name="PageHistory should not load history when no wiki ID is provided" time="0.002">
+    </testcase>
+    <testcase classname="PageHistory should format dates in the commit list" name="PageHistory should format dates in the commit list" time="0.004">
+    </testcase>
+    <testcase classname="PageHistory should start with null content" name="PageHistory should start with null content" time="0.002">
+    </testcase>
+    <testcase classname="PageHistory should show loading text when fetching content at SHA" name="PageHistory should show loading text when fetching content at SHA" time="0.052">
+    </testcase>
+    <testcase classname="PageHistory should show empty content when no wiki ID is provided" name="PageHistory should show empty content when no wiki ID is provided" time="0.002">
+    </testcase>
+    <testcase classname="PageHistory should show error text when content fetch fails" name="PageHistory should show error text when content fetch fails" time="0.002">
+    </testcase>
+    <testcase classname="PageHistory should render content in the content panel" name="PageHistory should render content in the content panel" time="0.002">
+    </testcase>
+  </testsuite>
+  <testsuite name="SearchPanel" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="6.182" tests="22">
+    <testcase classname="SearchPanel should be a Panel widget with the correct CSS class" name="SearchPanel should be a Panel widget with the correct CSS class" time="0.016">
+    </testcase>
+    <testcase classname="SearchPanel should have query bar and results as children" name="SearchPanel should have query bar and results as children" time="0.003">
+    </testcase>
+    <testcase classname="SearchPanel should start with empty search results" name="SearchPanel should start with empty search results" time="0.004">
+    </testcase>
+    <testcase classname="SearchPanel should start with an empty query input" name="SearchPanel should start with an empty query input" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should start with loading=false" name="SearchPanel should start with loading=false" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should have a search input and button" name="SearchPanel should have a search input and button" time="0.012">
+    </testcase>
+    <testcase classname="SearchPanel should have correct placeholder text on the search input" name="SearchPanel should have correct placeholder text on the search input" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should label the search button correctly" name="SearchPanel should label the search button correctly" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should call searchWiki and render results on search()" name="SearchPanel should call searchWiki and render results on search()" time="0.009">
+    </testcase>
+    <testcase classname="SearchPanel should set the input value to the search term" name="SearchPanel should set the input value to the search term" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should show loading state while searching" name="SearchPanel should show loading state while searching" time="0.053">
+    </testcase>
+    <testcase classname="SearchPanel should show empty message when search returns no results" name="SearchPanel should show empty message when search returns no results" time="0.003">
+    </testcase>
+    <testcase classname="SearchPanel should show empty message when search API fails" name="SearchPanel should show empty message when search API fails" time="0.003">
+    </testcase>
+    <testcase classname="SearchPanel should skip search when wikiId is empty" name="SearchPanel should skip search when wikiId is empty" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should skip search when serverSettings is not set" name="SearchPanel should skip search when serverSettings is not set" time="0.003">
+    </testcase>
+    <testcase classname="SearchPanel should render result rows with file, line, and content" name="SearchPanel should render result rows with file, line, and content" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should display column headers" name="SearchPanel should display column headers" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should emit resultSelected when a result row is clicked" name="SearchPanel should emit resultSelected when a result row is clicked" time="0.004">
+    </testcase>
+    <testcase classname="SearchPanel should not emit resultSelected when clicking non-row elements" name="SearchPanel should not emit resultSelected when clicking non-row elements" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should trigger search on Enter key in input" name="SearchPanel should trigger search on Enter key in input" time="0.052">
+    </testcase>
+    <testcase classname="SearchPanel should clear input and results on clear()" name="SearchPanel should clear input and results on clear()" time="0.002">
+    </testcase>
+    <testcase classname="SearchPanel should store the wiki ID via setWikiId" name="SearchPanel should store the wiki ID via setWikiId" time="0.003">
+    </testcase>
+  </testsuite>
+  <testsuite name="WikiEditor" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="6.539" tests="27">
+    <testcase classname="WikiEditor constructs without throwing" name="WikiEditor constructs without throwing" time="0.041">
+    </testcase>
+    <testcase classname="WikiEditor has CSS class on root element" name="WikiEditor has CSS class on root element" time="0.008">
+    </testcase>
+    <testcase classname="WikiEditor renders editor and preview panes" name="WikiEditor renders editor and preview panes" time="0.01">
+    </testcase>
+    <testcase classname="WikiEditor has preview toolbar with page title element" name="WikiEditor has preview toolbar with page title element" time="0.007">
+    </testcase>
+    <testcase classname="WikiEditor displays &quot;Untitled&quot; when page is null" name="WikiEditor displays &quot;Untitled&quot; when page is null" time="0.013">
+    </testcase>
+    <testcase classname="WikiEditor updates page title display when page is set" name="WikiEditor updates page title display when page is set" time="0.012">
+    </testcase>
+    <testcase classname="WikiEditor starts with empty content" name="WikiEditor starts with empty content" time="0.006">
+    </testcase>
+    <testcase classname="WikiEditor setContent updates editor value" name="WikiEditor setContent updates editor value" time="0.018">
+    </testcase>
+    <testcase classname="WikiEditor setContent updates preview HTML" name="WikiEditor setContent updates preview HTML" time="0.012">
+    </testcase>
+    <testcase classname="WikiEditor calls markdownRenderer with editor content" name="WikiEditor calls markdownRenderer with editor content" time="0.013">
+    </testcase>
+    <testcase classname="WikiEditor addToHistory: true records a history step (undo reverts)" name="WikiEditor addToHistory: true records a history step (undo reverts)" time="0.008">
+    </testcase>
+    <testcase classname="WikiEditor addToHistory: false does NOT record a history step" name="WikiEditor addToHistory: false does NOT record a history step" time="0.014">
+    </testcase>
+    <testcase classname="WikiEditor emits contentChanged on setContent" name="WikiEditor emits contentChanged on setContent" time="0.011">
+    </testcase>
+    <testcase classname="WikiEditor emits wikiLinkClicked on preview link click" name="WikiEditor emits wikiLinkClicked on preview link click" time="0.009">
+    </testcase>
+    <testcase classname="WikiEditor focus method does not throw" name="WikiEditor focus method does not throw" time="0.008">
+    </testcase>
+    <testcase classname="WikiEditor dispose does not throw" name="WikiEditor dispose does not throw" time="0.007">
+    </testcase>
+    <testcase classname="WikiEditor dispose after setContent does not throw" name="WikiEditor dispose after setContent does not throw" time="0.006">
+    </testcase>
+    <testcase classname="WikiEditor setPage stores wikiId, slug, and headSha" name="WikiEditor setPage stores wikiId, slug, and headSha" time="0.006">
+    </testcase>
+    <testcase classname="WikiEditor markDirty adds dirty class to save button" name="WikiEditor markDirty adds dirty class to save button" time="0.005">
+    </testcase>
+    <testcase classname="WikiEditor setContent triggers markDirty via contentChanged" name="WikiEditor setContent triggers markDirty via contentChanged" time="0.006">
+    </testcase>
+    <testcase classname="WikiEditor save button exists and is clickable" name="WikiEditor save button exists and is clickable" time="0.007">
+    </testcase>
+    <testcase classname="WikiEditor save status element exists" name="WikiEditor save status element exists" time="0.005">
+    </testcase>
+    <testcase classname="WikiEditor successful _handleSave clears dirty state" name="WikiEditor successful _handleSave clears dirty state" time="0.009">
+    </testcase>
+    <testcase classname="WikiEditor save() returns true on success" name="WikiEditor save() returns true on success" time="0.007">
+    </testcase>
+    <testcase classname="WikiEditor save() returns false when not dirty" name="WikiEditor save() returns false when not dirty" time="0.005">
+    </testcase>
+    <testcase classname="WikiEditor save() returns false on conflict (409)" name="WikiEditor save() returns false on conflict (409)" time="0.006">
+    </testcase>
+    <testcase classname="WikiEditor conflictDetected signal emits with editor content on 409" name="WikiEditor conflictDetected signal emits with editor content on 409" time="0.011">
+    </testcase>
+  </testsuite>
+  <testsuite name="WikiBrowser" errors="0" failures="0" skipped="0" timestamp="2026-05-17T17:23:02" time="7.959" tests="30">
+    <testcase classname="WikiBrowser should be a Panel widget with the correct CSS class" name="WikiBrowser should be a Panel widget with the correct CSS class" time="0.012">
+    </testcase>
+    <testcase classname="WikiBrowser should have a toolbar, search panel, page panel, and backlinks panel as children" name="WikiBrowser should have a toolbar, search panel, page panel, and backlinks panel as children" time="0.003">
+    </testcase>
+    <testcase classname="WikiBrowser should start with an empty active wiki id" name="WikiBrowser should start with an empty active wiki id" time="0.002">
+    </testcase>
+    <testcase classname="WikiBrowser should start with an empty page list" name="WikiBrowser should start with an empty page list" time="0.001">
+    </testcase>
+    <testcase classname="WikiBrowser should set activeWikiId after setActiveWiki" name="WikiBrowser should set activeWikiId after setActiveWiki" time="0.005">
+    </testcase>
+    <testcase classname="WikiBrowser should display wiki name after setActiveWiki" name="WikiBrowser should display wiki name after setActiveWiki" time="0.003">
+    </testcase>
+    <testcase classname="WikiBrowser should hide init button after setActiveWiki" name="WikiBrowser should hide init button after setActiveWiki" time="0.002">
+    </testcase>
+    <testcase classname="WikiBrowser should enable new-page button after setActiveWiki" name="WikiBrowser should enable new-page button after setActiveWiki" time="0.002">
+    </testcase>
+    <testcase classname="WikiBrowser should clear activeWikiId after clearWiki" name="WikiBrowser should clear activeWikiId after clearWiki" time="0.003">
+    </testcase>
+    <testcase classname="WikiBrowser should show init button after clearWiki" name="WikiBrowser should show init button after clearWiki" time="0.002">
+    </testcase>
+    <testcase classname="WikiBrowser should disable new-page button after clearWiki" name="WikiBrowser should disable new-page button after clearWiki" time="0.001">
+    </testcase>
+    <testcase classname="WikiBrowser should show a placeholder when no wiki is selected" name="WikiBrowser should show a placeholder when no wiki is selected" time="0.002">
+    </testcase>
+    <testcase classname="WikiBrowser should load and render pages for a selected wiki" name="WikiBrowser should load and render pages for a selected wiki" time="0.056">
+    </testcase>
+    <testcase classname="WikiBrowser should handle API errors gracefully" name="WikiBrowser should handle API errors gracefully" time="0.057">
+    </testcase>
+    <testcase classname="WikiBrowser should show a no-pages message for empty wiki" name="WikiBrowser should show a no-pages message for empty wiki" time="0.057">
+    </testcase>
+    <testcase classname="WikiBrowser should carry the correct values in the wikiSelected signal" name="WikiBrowser should carry the correct values in the wikiSelected signal" time="0.004">
+    </testcase>
+    <testcase classname="WikiBrowser should have a git status element in the toolbar" name="WikiBrowser should have a git status element in the toolbar" time="0.004">
+    </testcase>
+    <testcase classname="WikiBrowser should have pull and push buttons in the toolbar" name="WikiBrowser should have pull and push buttons in the toolbar" time="0.003">
+    </testcase>
+    <testcase classname="WikiBrowser should show disabled buttons when no wiki is selected" name="WikiBrowser should show disabled buttons when no wiki is selected" time="0.005">
+    </testcase>
+    <testcase classname="WikiBrowser should display branch and ahead/behind after successful git status fetch" name="WikiBrowser should display branch and ahead/behind after successful git status fetch" time="0.054">
+    </testcase>
+    <testcase classname="WikiBrowser should display dirty indicator when repo is dirty" name="WikiBrowser should display dirty indicator when repo is dirty" time="0.056">
+    </testcase>
+    <testcase classname="WikiBrowser should clear git status when no wiki is selected" name="WikiBrowser should clear git status when no wiki is selected" time="0.004">
+    </testcase>
+    <testcase classname="WikiBrowser should handle git status API error gracefully" name="WikiBrowser should handle git status API error gracefully" time="0.055">
+    </testcase>
+    <testcase classname="WikiBrowser should call gitPull when pull button is clicked" name="WikiBrowser should call gitPull when pull button is clicked" time="0.112">
+    </testcase>
+    <testcase classname="WikiBrowser should call gitPush when push button is clicked" name="WikiBrowser should call gitPush when push button is clicked" time="0.108">
+    </testcase>
+    <testcase classname="WikiBrowser should have a backlinks panel as a child widget" name="WikiBrowser should have a backlinks panel as a child widget" time="0.004">
+    </testcase>
+    <testcase classname="WikiBrowser should show backlinks title without count initially" name="WikiBrowser should show backlinks title without count initially" time="0.003">
+    </testcase>
+    <testcase classname="WikiBrowser should load and render backlinks after loadPage" name="WikiBrowser should load and render backlinks after loadPage" time="0.108">
+    </testcase>
+    <testcase classname="WikiBrowser should show backlink count when results exist" name="WikiBrowser should show backlink count when results exist" time="0.106">
+    </testcase>
+    <testcase classname="WikiBrowser should handle backlinks API error gracefully" name="WikiBrowser should handle backlinks API error gracefully" time="0.103">
+    </testcase>
+  </testsuite>
+</testsuites>
